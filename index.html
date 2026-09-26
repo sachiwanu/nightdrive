@@ -698,12 +698,16 @@ function buildSection(){
   /* lane markings: 8 m dashes on a 20 m cycle, thick dashes where lanes are added or dropped */
   const LY = 0.02;
   const dash = (z, x0, x1, d, g, w) => { for (let x = x0; x < x1; x += d + g){ const xe = Math.min(x + d, x1); Wb(x).hq(x, xe, z - w/2, z + w/2, LY, COL.line); } };
-  const solid = (z, x0, x1, w) => { for (let x = x0; x < x1; x += 50){ const xe = Math.min(x + 50, x1); Wb(x).hq(x, xe, z - w/2, z + w/2, LY, COL.line); } };
+  /* the two edge lines through the watch zone go in a mesh of their own, so an anomaly can
+     turn them yellow */
+  const edgeB = new B();
+  const solid = (z, x0, x1, w, zoned) => { for (let x = x0; x < x1; x += 50){ const xe = Math.min(x + 50, x1);
+    (zoned && x >= TUN_A && xe <= GANTRY_X + 40 ? edgeB : Wb(x)).hq(x, xe, z - w/2, z + w/2, LY, COL.line); } };
   const edgeFn = (f, x0, x1) => { for (let x = x0; x < x1; x += 10){ const xe = Math.min(x + 10, x1), za = f(x) + 0.35, zb = f(xe) + 0.35;
     Wb(x).quad([x,LY,za-0.08],[xe,LY,zb-0.08],[xe,LY,zb+0.08],[x,LY,za+0.08], COL.line); } };
   dash(-1.75, 0, SECTION, 8, 12, 0.15); dash(1.75, 0, SECTION, 8, 12, 0.15);
-  solid(5.25, 0, SECTION, 0.2);
-  solid(-5.25, 0, DECEL_START, 0.2); dash(-5.25, DECEL_START, FORK, 6, 6, 0.3);
+  solid(5.25, 0, SECTION, 0.2, true);
+  solid(-5.25, 0, DECEL_START, 0.2, true); dash(-5.25, DECEL_START, FORK, 6, 6, 0.3);
   solid(-5.25, FORK, X_JOIN, 0.2); dash(-5.25, X_JOIN, MERGE_END, 6, 6, 0.3); solid(-5.25, MERGE_END, HM_A, 0.2);
   dash(-5.25, HM_A, HM_FORK, 6, 6, 0.3); solid(-5.25, HM_FORK, SECTION, 0.2);
   edgeFn(decelOuter, DECEL_START, FORK); edgeFn(accOuter, ACC_END, MERGE_END); edgeFn(hmOuter, HM_A, HM_FORK);
@@ -965,6 +969,7 @@ function buildSection(){
   const poles = new THREE.Mesh(poleB.geo(), worldMat), heads = new THREE.Mesh(headB.geo(), worldMat);
   poles.frustumCulled = heads.frustumCulled = false;
   g.add(poles); g.add(heads);
+  const edges = new THREE.Mesh(edgeB.geo(), worldMat); edges.frustumCulled = false; g.add(edges);
   g.add(new THREE.Mesh(signExit.geo(), mapMat(exitTex)));
   g.add(new THREE.Mesh(signMain.geo(), mapMat(mainTex)));
   g.add(new THREE.Mesh(chev.geo(), mapMat(chevTex)));
@@ -980,7 +985,7 @@ function buildSection(){
   const pts = new THREE.Points(gg, glowMat); pts.frustumCulled = false; g.add(pts);
   const tpts = new THREE.Points(tg, tunGlowMat); tpts.frustumCulled = false; g.add(tpts);
   const tunMesh = new THREE.Mesh(tunB.geo(), tunLampMat); g.add(tunMesh);
-  return { g, poles: poles.geometry, heads: heads.geometry, glows: gg, tunLamps: tunMesh.geometry, tunGlows: tg, TL0, TL1 };
+  return { g, poles: poles.geometry, heads: heads.geometry, edges: edges.geometry, glows: gg, tunLamps: tunMesh.geometry, tunGlows: tg, TL0, TL1 };
 }
 const SEC = buildSection();
 LIVE = LIGHTS.map(l => l.slice());
@@ -992,6 +997,7 @@ const ORIG = {
   headP: SEC.heads.attributes.position.array.slice(), headC: SEC.heads.attributes.aCol.array.slice(), headE: SEC.heads.attributes.aEmi.array.slice(),
   glowP: SEC.glows.attributes.position.array.slice(), glowC: SEC.glows.attributes.aCol.array.slice(),
   tunC: SEC.tunLamps.attributes.aCol.array.slice(), tunGC: SEC.tunGlows.attributes.aCol.array.slice(),
+  edgeC: SEC.edges.attributes.aCol.array.slice(),
 };
 
 /* the road home is fenced off with a "通行止め" barricade until the run earns it */
@@ -1412,7 +1418,7 @@ function readInput(){
 const ANOMALIES = {
   1: 'ハンドルが船の舵になっている',   2: '街灯が全部赤い',                 3: '路肩に人が立っている',
   4: '出口の看板が鏡文字',             5: '街灯が1本だけ傾いている',         6: '対向車線の車が同じ向きに走っている',
-  7: '空中を走っている車が何台か見える', 8: '看板の数字が ∞',                 9: '路肩に人が何十人も並んでいる',
+  7: '空中を走っている車が何台か見える', 8: '両端の白線が黄色になっている',   9: '路肩に人が何十人も並んでいる',
   10: 'ルームミラーに後ろの席の人影',
   11: 'トンネルなのに雨がやまない',     12: 'トンネルの照明が点滅している',   13: 'トンネルの中に人が立っている',
   15: '奥から人が走ってくる',           16: '速度計の桁が一桁増えている',   17: '車が立って走っている',
@@ -1463,6 +1469,7 @@ function placeTunnelPerson(){
 function applyAnomaly(){
   /* start from a clean section */
   SEC.tunLamps.attributes.aCol.array.set(ORIG.tunC); SEC.tunGlows.attributes.aCol.array.set(ORIG.tunGC);
+  SEC.edges.attributes.aCol.array.set(ORIG.edgeC);
   SEC.poles.attributes.position.array.set(ORIG.poleP);
   SEC.heads.attributes.position.array.set(ORIG.headP); SEC.heads.attributes.aCol.array.set(ORIG.headC); SEC.heads.attributes.aEmi.array.set(ORIG.headE);
   SEC.glows.attributes.position.array.set(ORIG.glowP); SEC.glows.attributes.aCol.array.set(ORIG.glowC);
@@ -1473,11 +1480,11 @@ function applyAnomaly(){
   if (anomaly === 3) placePeople(1);
   if (anomaly === 4) signMode.mirror = true;
   if (anomaly === 5) tiltLamp(pickLamp(), 16 * D2R);
-  if (anomaly === 8) signMode.inf = true;
+  if (anomaly === 8){ const a = SEC.edges.attributes.aCol.array; for (let i = 0; i < a.length; i += 3){ a[i] = 0.95; a[i+1] = 0.74; a[i+2] = 0.0; } }
   if (anomaly === 9) placePeople(28);
   if (anomaly === 13) placeTunnelPerson();
   for (const a of [SEC.poles.attributes.position, SEC.heads.attributes.position, SEC.heads.attributes.aCol, SEC.heads.attributes.aEmi,
-                   SEC.glows.attributes.position, SEC.glows.attributes.aCol, SEC.tunLamps.attributes.aCol, SEC.tunGlows.attributes.aCol]) a.needsUpdate = true;
+                   SEC.glows.attributes.position, SEC.glows.attributes.aCol, SEC.tunLamps.attributes.aCol, SEC.tunGlows.attributes.aCol, SEC.edges.attributes.aCol]) a.needsUpdate = true;
   bakeLightmap();
   drawExitSign(P.count);
 }
@@ -1763,7 +1770,7 @@ function sync(){
    the car behind, the crash. The context starts on the first tap, as browsers require. */
 const SND = { ctx: null, on: true };
 try { SND.on = localStorage.getItem('nd-sound') !== 'off'; } catch (_) {}
-const SND_VOL = 0.9;
+const SND_VOL = 0.6;                   // a little under full, as asked
 function sndInit(){
   if (SND.ctx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
