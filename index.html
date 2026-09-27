@@ -168,7 +168,6 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
   <div class="home-card" role="dialog" aria-labelledby="endTtl">
     <p class="home-eyebrow">8番出口</p>
     <h1 id="endTtl">ただいま。</h1>
-    <p id="endMsg" class="home-msg"></p>
     <dl class="stats home-stats">
       <div><dt>走った区間</dt><dd><b id="endSecs">0</b></dd></div>
       <div><dt>時間</dt><dd><b id="endTime">0:00</b></dd></div>
@@ -1126,8 +1125,9 @@ const city = (() => {
   const add = (x, y, z, c, b, s) => { P.push(x, y, z); C.push(c[0]*b, c[1]*b, c[2]*b); S.push(s); };
   const tint = () => { const q = r(); return q > 0.82 ? [0.72, 0.85, 1.0] : [1.0, 0.77, 0.45]; };
   /* towns clumped on a handful of bearings with dark country between them */
+  const towns = [];
   for (let k = 0; k < 16; k++){
-    const tx = -2600 + r()*5200, tz = -800 - Math.pow(r(), 1.3) * 3400, d = -tz;
+    const tx = -2600 + r()*5200, tz = -800 - Math.pow(r(), 1.3) * 3400, d = -tz, i0 = S.length;
     const rx = 40 + d*0.07*r() + 30, rz = 25 + d*0.045*r(), n = 30 + Math.floor(r()*120);
     for (let i = 0; i < n; i++){ const a = r()*Math.PI*2, q = Math.sqrt(r()); add(tx + Math.cos(a)*rx*q, -40 + r()*1.5, tz + Math.sin(a)*rz*q, tint(), 0.55 + r()*0.8, 1.4 + r()*1.6); }
     if (r() < 0.4) for (let t = 0; t < 8; t++){
@@ -1136,31 +1136,52 @@ const city = (() => {
       if (top > 40) add(bx, -38 + top, bz, [1.0, 0.16, 0.1], 1.1, 2.6);
     }
     if (r() < 0.5){ const ang = r()*Math.PI, step = 6 + r()*8; for (let i = 0; i < 24; i++) add(tx + Math.cos(ang)*step*(i - 12), -39.8, tz + Math.sin(ang)*step*(i - 12), [1.0, 0.72, 0.4], 0.9, 1.6); }
+    towns.push({ tx, tz, rx, rz, i0, i1: S.length });
   }
   for (let i = 0; i < 180; i++) add(-3000 + r()*6000, -40, -800 - r()*3400, tint(), 0.4 + r()*0.6, 1.3 + r()*1.2);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aCol', new THREE.Float32BufferAttribute(C, 3)); g.setAttribute('aSize', new THREE.Float32BufferAttribute(S, 1));
   const pts = new THREE.Points(g, cityMat); pts.frustumCulled = false; scene.add(pts);
+  pts.userData.towns = towns;
   return pts;
 })();
-/* anomaly: the town's lights on the far hill burn as the 大 of 大文字焼き. It rides with the
-   town (always the same place ahead-left) and flickers like fire. */
+/* anomaly: one of the towns you always see off to the left has rearranged its own lights into
+   the 大 of 大文字焼き - same place, same size, same colours and brightness, so it is more "wait,
+   is that...?" than a blaze. The town's own points go dark while the 大 is shown. */
 const daimonji = (() => {
-  const P = [], S = [], base = [], r = mulberry32(88);
-  /* 20 deg left of the road, 0.5-5.5 deg above the horizon: under the mirror, over the rail */
-  const cx = 1880, cy = 106, cz = -684, R = 88, dl = Math.hypot(cx, cz), rx = -cz / dl, rz = cx / dl;
-  const strokes = [[[-1, 0.42], [1, 0.42]], [[0, 1.0], [0, 0.42]], [[0, 0.42], [-0.92, -1.0]], [[0.04, 0.28], [0.92, -1.0]]];
-  for (const [[x0, y0], [x1, y1]] of strokes){
-    const n = Math.max(4, Math.round(Math.hypot(x1 - x0, y1 - y0) / 0.05));
-    for (let i = 0; i <= n; i++){
-      const t = i / n, u = x0 + (x1 - x0) * t + (r() - 0.5) * 0.03, v = y0 + (y1 - y0) * t + (r() - 0.5) * 0.03;
-      P.push(cx + rx * u * R, cy + v * R, cz + rz * u * R); S.push(3.4 + r() * 2.4); base.push(0.8 + r() * 0.5);
-    }
+  const towns = city.userData.towns;
+  let best = null;
+  for (const t of towns){
+    const ang = Math.atan2(-t.tz, t.tx) / D2R, d = Math.hypot(t.tx, t.tz);
+    if (ang > 8 && ang < 34 && d < 3400 && (!best || t.i1 - t.i0 > best.i1 - best.i0)) best = t;
   }
-  const n = S.length, C = new Float32Array(n * 3), g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aCol', new THREE.BufferAttribute(C, 3)); g.setAttribute('aSize', new THREE.Float32BufferAttribute(S, 1));
+  if (!best) best = towns.reduce((a, t) => (t.i1 - t.i0 > a.i1 - a.i0 ? t : a));
+  const cg = city.geometry, cc = cg.attributes.aCol.array, cs = cg.attributes.aSize.array, n = best.i1 - best.i0;
+  const W = clamp(2 * Math.max(best.rx, best.rz), 110, 240), H = W * 0.55;
+  const dl = Math.hypot(best.tx, best.tz), ax = -best.tz / dl, az = best.tx / dl, r = mulberry32(88);
+  const strokes = [[[-1, 0.42], [1, 0.42]], [[0, 1.0], [0, 0.42]], [[0, 0.42], [-0.92, -1.0]], [[0.04, 0.28], [0.92, -1.0]]];
+  const lens = strokes.map(([[x0, y0], [x1, y1]]) => Math.hypot(x1 - x0, y1 - y0)), total = lens.reduce((a, b) => a + b, 0);
+  const P = [], C = new Float32Array(n * 3), S = new Float32Array(n);
+  for (let i = 0; i < n; i++){
+    let a = (i + r() * 0.6) / n * total, k = 0;
+    while (k < 3 && a > lens[k]){ a -= lens[k]; k++; }
+    const [[x0, y0], [x1, y1]] = strokes[k], t = clamp(a / lens[k], 0, 1);
+    const u = x0 + (x1 - x0) * t + (r() - 0.5) * 0.05, v = y0 + (y1 - y0) * t + (r() - 0.5) * 0.05;
+    P.push(best.tx + ax * u * W / 2, -40 + (v + 1) / 2 * H, best.tz + az * u * W / 2);
+    const j = best.i0 + i; C[i*3] = cc[j*3]; C[i*3+1] = cc[j*3+1]; C[i*3+2] = cc[j*3+2]; S[i] = cs[j];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aCol', new THREE.BufferAttribute(C, 3)); g.setAttribute('aSize', new THREE.BufferAttribute(S, 1));
   const pts = new THREE.Points(g, cityMat); pts.frustumCulled = false; pts.visible = false; city.add(pts);
-  return { pts, C, base, n, geo: g };
+  const saved = cc.slice(best.i0 * 3, best.i1 * 3);
+  return {
+    pts, town: best,
+    show(on){
+      pts.visible = on;
+      for (let k = 0; k < saved.length; k++) cc[best.i0 * 3 + k] = on ? 0 : saved[k];
+      cg.attributes.aCol.needsUpdate = true;
+    },
+  };
 })();
 
 /* ---------------------------------------------------------------- the player's car */
@@ -1369,6 +1390,56 @@ function personModel(female, shirt){
   g.visible = false; scene.add(g);
   return { g, legs, arms };
 }
+/* the middle-aged man on the motorbike who passes you in every zone: a cruiser, a brown
+   leather jacket, jeans, a half helmet and a moustache. Two of him, for the twins anomaly. */
+function bikerModel(){
+  const g = new THREE.Group(), bike = new THREE.Group(), rider = new THREE.Group(), head = new THREE.Group();
+  g.add(bike, rider);
+  const black = [0.05, 0.05, 0.06], chrome = [0.6, 0.61, 0.64], tank = [0.38, 0.06, 0.05], jacket = [0.3, 0.19, 0.11];
+  const jeans = [0.16, 0.22, 0.36], skin = [0.52, 0.42, 0.36], helmet = [0.08, 0.08, 0.09], glove = [0.04, 0.04, 0.04];
+  const mesh = b => new THREE.Mesh(b.geo(), worldMat);
+  const wheels = [];
+  for (const x of [-0.72, 0.72]){
+    const b = new B();
+    for (let i = 0; i < 18; i++){ const a = i / 18 * Math.PI * 2; b.box(0.33*Math.cos(a), 0.33*Math.sin(a), 0, 0.13, 0.09, 0.13, black, 0, 1, 0, a + Math.PI/2); }
+    b.box(0, 0, 0, 0.12, 0.12, 0.16, chrome);
+    const m = mesh(b); m.position.set(x, 0.33, 0); bike.add(m); wheels.push(m);
+  }
+  const b = new B();
+  for (const z of [-0.08, 0.08]) tube(b, 0.72, 0.33, 0.52, 1.05, 0.06, chrome, z);
+  b.box(0.5, 1.12, 0, 0.05, 0.05, 0.78, chrome);
+  b.box(0.68, 0.98, 0, 0.12, 0.18, 0.2, [1, 0.95, 0.85], 1.6);
+  b.box(0.18, 0.92, 0, 0.55, 0.22, 0.3, tank);
+  b.box(-0.3, 0.84, 0, 0.6, 0.1, 0.34, black);
+  b.box(0.0, 0.5, 0, 0.5, 0.36, 0.3, chrome);
+  tube(b, -0.72, 0.33, -0.3, 0.8, 0.06, black);
+  b.box(-0.55, 0.42, 0.2, 0.8, 0.08, 0.08, chrome);
+  b.box(-0.8, 0.78, 0, 0.05, 0.1, 0.18, [1, 0.1, 0.07], 1.4);
+  b.box(-0.62, 0.7, 0, 0.35, 0.05, 0.3, black);
+  bike.add(mesh(b));
+  const r = new B();
+  r.box(-0.12, 1.36, 0, 0.36, 0.62, 0.5, jacket, 0, 1, 0, -0.12);
+  r.box(0.04, 1.18, 0, 0.18, 0.34, 0.44, jacket);                 /* the belly */
+  for (const s of [-1, 1]){
+    tube(r, -0.02, 1.56, 0.47, 1.14, 0.1, jacket, s * 0.3);
+    r.box(0.49, 1.13, s * 0.36, 0.1, 0.09, 0.09, glove);
+    tube(r, -0.22, 1.0, 0.16, 0.98, 0.17, jeans, s * 0.17);
+    tube(r, 0.16, 0.98, 0.06, 0.46, 0.14, jeans, s * 0.21);
+    r.box(0.08, 0.42, s * 0.22, 0.24, 0.1, 0.11, black);
+  }
+  rider.add(mesh(r));
+  head.position.set(-0.04, 1.68, 0);
+  const h = new B();
+  h.box(0.0, 0.13, 0, 0.23, 0.26, 0.21, skin, 0.04);
+  h.box(-0.02, 0.27, 0, 0.27, 0.13, 0.25, helmet);
+  h.box(0.117, 0.07, 0, 0.02, 0.035, 0.13, [0.1, 0.08, 0.07]);
+  for (const s of [-1, 1]) h.box(0.116, 0.16, s * 0.05, 0.012, 0.03, 0.035, [0.03, 0.03, 0.03]);
+  head.add(mesh(h)); rider.add(head);
+  g.visible = false; scene.add(g);
+  return { g, bike, rider, head, wheels };
+}
+const bikers = [bikerModel(), bikerModel()];
+
 /* the ones waiting at the gate in the good ending: wife and child, waving */
 const family = (() => {
   const wife = personModel(true, [0.78, 0.55, 0.6]), kid = personModel(false, [0.95, 0.78, 0.3]);
@@ -1540,6 +1611,7 @@ function updateTraffic(dt){
     for (const o of traffic){ if (o === c || o.onc || leaving) continue;
       if (Math.abs(o.z - c.z) < 2.2 && o.x > c.x){ const g = o.x - c.x - o.hl - c.hl; if (g < gap){ gap = g; lv = o.v; } } }
     if (!P.onExit && Math.abs(P.d - c.z) < 2.2 && pose.x > c.x){ const g = pose.x - c.x - 2.3 - c.hl; if (g < gap){ gap = g; lv = P.v; } }
+    if (BK.on && !leaving && Math.abs(BK.z - c.z) < 2.2 && BK.x > c.x){ const g = BK.x - c.x - 1.1 * BK.scale - c.hl; if (g < gap){ gap = g; lv = BK.v; } }
     let want = c.vPref;
     if (gap < 40) want = Math.min(want, lv + (gap - 12) * 0.25);
     if (gap < 6) want = Math.min(want, lv - 2);
@@ -1626,9 +1698,15 @@ const ANOMALIES = {
   15: '奥から人が走ってくる',           16: '速度計の桁が一桁増えている',   17: '車が立って走っている',
   18: '走っている車が自転車になっている', 19: '走っている車が人間のランナー（男女）になっている',
   20: '遠くの街の灯りが大文字焼きになっている',  21: '雨が漢字の「雨」になって降ってくる',
+  22: 'バイクのおじさんが後ろ向きに乗っている', 23: 'バイクのおじさんが巨大',       24: 'バイクのおじさんがこちらをじっと見ている',
+  25: 'バイクのおじさんが2人いる',             26: 'バイクのおじさんのバイクが無い',
 };
 const DM = { on: false, k: 0 };        // anomaly 20: the 大 on the far hill, and how lit it is
 const ANOM_IDS = Object.keys(ANOMALIES).map(Number);
+/* the man on the motorbike passes you in every zone. For the first three zones he is always
+   the same, so you learn him; from the fourth on, he can be the anomaly. */
+const BIKER_IDS = [22, 23, 24, 25, 26];
+const BK = { on: false, x: 0, z: 0, v: 0, phase: 0, t: 0, wheel: 0, scale: 1, mode: 0, twin: false };
 let anomaly = 0, sameMode = false, pendingRoll = false, rainInTun = false, tunFlick = false, tunK = 1, flickT = 0, flickOn = true;
 const inZone = () => !P.onExit && P.x >= ZONE_A && P.x < FORK;
 const m4 = new THREE.Matrix4(), qFace = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), one = new THREE.Vector3(1, 1, 1), vpos = new THREE.Vector3();
@@ -1680,7 +1758,7 @@ function applyAnomaly(){
   SEC.glows.attributes.position.array.set(ORIG.glowP); SEC.glows.attributes.aCol.array.set(ORIG.glowC);
   LIVE = LIGHTS.map(l => l.slice());
   persons.count = 0; signMode.mirror = false; signMode.inf = false; runner.stop();
-  DM.on = false;                                          /* the fires die down over a few seconds */
+  if (DM.on){ DM.on = false; daimonji.show(false); }
   /* back to cars: anything still a bike or a runner clears off (ahead speeds away, behind drops
      back) and turns back into a car once the fog has it */
   for (const c of traffic) if (!c.onc){ c.want = 'car'; if (c.kind !== 'car') c.vPref = c.x > pose.x ? 45 : 14; }
@@ -1700,7 +1778,8 @@ function applyAnomaly(){
 function rollAnomaly(){
   if (DBG.mode === 'all'){ anomaly = ANOM_IDS[DBG.idx]; DBG.idx = (DBG.idx + 1) % ANOM_IDS.length; applyAnomaly(); dbgHud(); return; }
   /* 6 in 10 sections have one - the figure usually quoted for the original 8番出口 */
-  anomaly = Math.random() < 0.6 ? ANOM_IDS[Math.floor(Math.random() * ANOM_IDS.length)] : 0;
+  const pool = P.sections >= 3 ? ANOM_IDS : ANOM_IDS.filter(id => !BIKER_IDS.includes(id));
+  anomaly = Math.random() < 0.6 ? pool[Math.floor(Math.random() * pool.length)] : 0;
   applyAnomaly();
   /* bikes / runners next: clear the cars from around you now, so by the tunnel almost all
      of them are far enough away to change unseen */
@@ -1728,8 +1807,23 @@ function enterTunnel(){
       i++; setKind(c, k); c.vPref = c.v = 17 + Math.random() * 5; c.lc = 0; c.ind = 0;
     }
   }
-  if (anomaly === 20){ DM.on = true; DM.k = 1; }
+  if (anomaly === 20){ DM.on = true; daimonji.show(true); }
+  spawnBiker();
 }
+/* he starts 110 m behind you in the tunnel (a headlight in the mirror), catches up in the lane
+   beside you, rides just ahead of you for a few seconds, then pulls away into the rain */
+function spawnBiker(){
+  const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 1 ? 2 : 1;
+  Object.assign(BK, { on: true, z: LANES[lane], x: pose.x - 110, v: P.v + 9, phase: 0, t: 0, mode: anomaly,
+                      scale: anomaly === 23 ? 2.2 : 1, twin: anomaly === 25 });
+  bikers.forEach((bm, i) => {
+    bm.g.visible = i === 0 || BK.twin;
+    bm.bike.visible = anomaly !== 26;
+    bm.rider.rotation.y = anomaly === 22 ? Math.PI : 0; bm.rider.position.x = anomaly === 22 ? -0.4 : 0;
+    bm.g.scale.setScalar(BK.scale); bm.head.rotation.y = 0;
+  });
+}
+function hideBiker(){ BK.on = false; for (const bm of bikers) bm.g.visible = false; }
 /* one of the cars on your side, stood up on its tail and crawling along at 43 km/h a little
    past the tunnel. Taken from the traffic furthest from you, so nothing visibly jumps. It is
    a car like any other: hit it and you are dead. */
@@ -1763,7 +1857,6 @@ function judgeAtFork(took){
     /* 8番出口: whichever way was right, its road home opens - off the loop, or off the main line */
     P.home = took ? 'exit' : 'main';
     (took ? barricade : barricadeM).g.visible = false;
-    showToast('8番出口 ― 家への道が開いた');
   } else {
     P.count = right ? Math.min(P.count + 1, 8) : 0;
     P.best = Math.max(P.best, P.count);
@@ -1778,8 +1871,10 @@ const LATE_T = 20 * 60;                // seconds of driving
 function startHomeLeg(){
   P.late = P.runT > LATE_T;
   const HP = P.hp, tx = HP.x0, hz = HP.streetZ1 + 14, gy = groundY(hz);
-  family.wife.g.position.set(tx + 4.2, gy, hz + 1.1); family.kid.g.position.set(tx + 4.1, gy, hz + 2.3);
-  for (const p of [family.wife, family.kid]) p.g.rotation.y = Math.PI;     /* facing the street */
+  /* at the gate, both inside the view once you have turned to look, facing the car and waving */
+  family.wife.g.position.set(tx + 4.5, gy, hz + 3.0); family.kid.g.position.set(tx + 4.1, gy, hz + 4.6);
+  const stop = pathPose(HP, HP.L - 19, 0, {});
+  for (const p of [family.wife, family.kid]) p.g.rotation.y = -Math.atan2(stop.z - p.g.position.z, stop.x - p.g.position.x);
   family.wife.g.visible = family.kid.g.visible = !P.late;
   homeLights.lit.visible = homeLights.glow.visible = !P.late; homeLights.dark.visible = P.late;
   if (P.late){ for (const i of HOMELIT.lights) LIVE[i][5] = 0; bakeLightmap(); }
@@ -1794,7 +1889,6 @@ function showEnding(){
   pauseBtn.hidden = true; touchEl.hidden = true;
   endEl.classList.toggle('late', P.late);
   $('endTtl').textContent = P.late ? '……ただいま。' : 'ただいま。';
-  $('endMsg').textContent = P.late ? '家の灯りは、もう消えていた。誰もいない。' : '妻と子どもが、家の前で待っていてくれた。';
   const t = Math.round(P.runT), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('endSecs').textContent = P.sections; $('endTime').textContent = mm + ':' + ss;
   endEl.hidden = false; $('again').focus();
@@ -1820,7 +1914,8 @@ function resetRun(){
   $('toast').hidden = true;
   yawBlend = 0; crashEl.hidden = true; overEl.hidden = true; endEl.hidden = true; barricade.g.visible = true; barricadeM.g.visible = true;
   sameMode = false; pendingRoll = false; lookA = 0; for (const f of flyers) f.on = false;
-  DM.on = false; DM.k = 0; for (const c of traffic) if (!c.onc) c.want = 'car';
+  DM.on = false; daimonji.show(false); for (const c of traffic) if (!c.onc) c.want = 'car';
+  hideBiker();
   playerPose(pose); seedTraffic(); rollAnomaly();
   if (DBG.mode === '8a' || DBG.mode === '8b' || DBG.mode === '8late'){
     P.count = 8;
@@ -1890,6 +1985,7 @@ function step(dt){
       P.x -= SECTION; runner.x -= SECTION;
       for (const c of traffic) c.x -= SECTION;
       for (const f of flyers) f.x -= SECTION;
+      BK.x -= SECTION;
     }
   }
   if (pendingRoll && !P.homeLeg && (P.onExit ? P.s > EX.loopS0 + 20 : P.x > FORK + 80)){ pendingRoll = false; rollAnomaly(); }
@@ -1901,6 +1997,18 @@ function step(dt){
     /* once overhead it is out of every view: send it round again while the zone lasts */
     if (f.x < pose.x - 10){ if (anomaly === 7 && pose.x + 360 < GANTRY_X) spawnFlyer(f, pose.x + 360 + Math.random() * 120); else f.on = false; }
   }
+  if (BK.on){
+    const dx = BK.x - pose.x;
+    /* he settles about 10 m ahead in the next lane (right in view through the windscreen),
+       keeps pace for five seconds, then goes */
+    if (BK.phase === 0 && dx > 2.5){ BK.phase = 1; BK.t = 0; }
+    if (BK.phase === 1 && (BK.t += dt) > 5) BK.phase = 2;
+    let target = Math.max(8, P.v + (BK.phase === 0 ? 9 : BK.phase === 1 ? 0.3 : 11));
+    for (const c of traffic) if (!c.onc && Math.abs(c.z - BK.z) < 2 && c.x > BK.x && c.x - BK.x < 16 + c.hl) target = Math.min(target, c.v);
+    BK.v += clamp(target - BK.v, -6 * dt, 4 * dt); BK.x += BK.v * dt; BK.wheel += BK.v * dt;
+    /* gone once well ahead in the fog, or once the zone is over and nobody sees him go */
+    if ((BK.phase === 2 && dx > 250) || ((P.onExit || P.x > FORK + 60) && (Math.abs(dx) > 230 || unseen(BK)))) hideBiker();
+  }
   if (runner.on && runner.x > TUN_B + 6) runner.x = Math.max(TUN_B + 6, runner.x - 4.3 * dt);
 
   if (P.homeLeg) P.risk = 0;          /* nobody follows you home */
@@ -1909,6 +2017,10 @@ function step(dt){
     if (!P.onExit && !P.home) for (const c of traffic){          /* nothing can hit you once the way home is open */
       if (c.onc) continue;
       if (Math.abs(c.x - pose.x) < 2.3 + c.hl && Math.abs(c.z - pose.z) < 0.92 + c.hw){ die('衝突した'); break; }
+    }
+    if (!P.onExit && !P.home && BK.on) for (let i = 0; i < (BK.twin ? 2 : 1); i++){
+      const bz = BK.z + (BK.twin ? (i ? 0.8 : -0.8) : 0);
+      if (Math.abs(BK.x - pose.x) < 2.3 + 1.1 * BK.scale && Math.abs(bz - pose.z) < 0.92 + 0.45 * BK.scale){ die('衝突した'); break; }
     }
     /* same model as the UE build: crawl below 65 km/h and the car behind closes in, and the
        chance of it hitting you climbs with how close it is */
@@ -1983,27 +2095,16 @@ function sync(){
   const sdt = Math.max(0, clock - lastSyncClock); lastSyncClock = clock;
   /* home: once the car has stopped at the gate, the driver turns to look at the house */
   const nowT = performance.now() / 1000, ldt = Math.min(0.1, Math.max(0, nowT - lastLookT)); lastLookT = nowT;
-  const wantLook = P.homeLeg && P.v < 0.5 && P.s > P.hp.L - 25 ? 1.2 : 0;
+  const wantLook = P.homeLeg && P.v < 0.5 && P.s > P.hp.L - 25 ? 1.25 : 0;
   lookA += (wantLook - lookA) * Math.min(1, ldt * 1.1);
   cam.rotation.y = -Math.PI/2 - lookA;
   applyDawn(P.homeLeg ? sm(clamp((P.s / P.hp.L - 0.04) / 0.82, 0, 1)) : 0, P.homeLeg && P.late);
   /* the family waves as you pull up */
   if (family.wife.g.visible){
-    const w = Math.sin(nowT * 7);
-    family.wife.arms[0].rotation.x = 2.5 + 0.35 * w;
-    family.kid.arms[0].rotation.x = 2.6 + 0.45 * Math.sin(nowT * 9 + 1);
-    family.kid.arms[1].rotation.x = -2.6 - 0.45 * Math.sin(nowT * 9 + 2.5);
-  }
-  /* the 大 on the far hill: lit while its anomaly lasts, then burning down */
-  DM.k = DM.on ? 1 : Math.max(0, DM.k - sdt / 2.5);
-  daimonji.pts.visible = DM.k > 0;
-  if (DM.k > 0){
-    const C = daimonji.C;
-    for (let i = 0; i < daimonji.n; i++){
-      const f = daimonji.base[i] * DM.k * (0.72 + 0.28 * Math.sin(clock * 7 + i * 1.7) * Math.sin(clock * 3.1 + i * 0.6));
-      C[i*3] = 1.0 * f; C[i*3+1] = 0.42 * f; C[i*3+2] = 0.08 * f;
-    }
-    daimonji.geo.attributes.aCol.needsUpdate = true;
+    /* an arm raised toward you, swinging side to side */
+    family.wife.arms[1].rotation.set(0.4 * Math.sin(nowT * 7), 0, 2.3);
+    family.kid.arms[0].rotation.set(0.45 * Math.sin(nowT * 9 + 1), 0, 2.45);
+    family.kid.arms[1].rotation.set(0.45 * Math.sin(nowT * 9 + 2.5), 0, 2.45);
   }
   const yawOff = Math.atan2(P.latV, Math.max(P.v, 1)) * 0.9 + yawBlend;
   car.position.set(pose.x, pose.y, pose.z);
@@ -2073,6 +2174,19 @@ function sync(){
     f.m.position.set(f.x, y, f.z); f.m.rotation.set(0, Math.PI, Math.sin(clock * 0.9 + f.ph) * 0.03);
     carLampGlows(f.x, y, f.z, Math.PI, 2.25, false, 0, false, 1, 1);
   }
+  bikers.forEach((bm, i) => {
+    if (!BK.on || (i === 1 && !BK.twin)){ bm.g.visible = false; return; }
+    bm.g.visible = true;
+    const bz = BK.z + (BK.twin ? (i ? 0.8 : -0.8) : 0), s = BK.scale;
+    bm.g.position.set(BK.x, 0, bz);
+    for (const w of bm.wheels) w.rotation.z = -BK.wheel / 0.33;
+    /* anomaly: he turns his head to follow you, all the way round if he has to */
+    bm.head.rotation.y = BK.mode === 24 ? clamp(-Math.atan2(pose.z - bz, pose.x - BK.x), -2.6, 2.6) : 0;
+    if (bm.bike.visible){
+      dglow(BK.x + 0.74*s, 0.98*s, bz, 1.0, 0.95, 0.85, 0.7*s); dglow(BK.x + 0.8*s, 0.9*s, bz, 0.35, 0.33, 0.3, 3.0*s);
+      dglow(BK.x - 0.82*s, 0.78*s, bz, 0.9, 0.07, 0.05, 0.45*s);
+    }
+  });
   if (runner.on){
     const moving = runner.x > TUN_B + 6.01, ph = clock * 2 * Math.PI * 2.5, sw = moving ? Math.sin(ph) : 0;
     runner.g.position.set(runner.x, (moving ? Math.abs(Math.cos(ph)) * 0.07 : 0), runner.z);
@@ -2161,10 +2275,12 @@ function sndInit(){
   h1.type = h2.type = 'square'; h1.frequency.value = 415; h2.frequency.value = 523;
   h1.connect(hLP); h2.connect(hLP); chain(hLP, hornG, master); h1.start(); h2.start();
   /* the empty house: two low tones beating against each other */
+  const bkO = ctx.createOscillator(), bkLP = F('lowpass', 900, 1.5), bkG = G(0);
+  bkO.type = 'sawtooth'; bkO.connect(bkLP); chain(bkLP, bkG, bus); bkO.start();
   const droneG = G(0), dLP = F('lowpass', 380);
   for (const [f, type] of [[55, 'sine'], [58.3, 'sine'], [110.6, 'triangle']]){ const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.connect(dLP); o.start(); }
   chain(dLP, droneG, master);
-  Object.assign(SND, { ctx, master, bus, white, G, F, droneG, roadLP, roadG, hissBP, hissG, eng1, eng2, engG, windBP, windG, windHiG, rainS, rainG, trLG, trRG, hornG, tSend });
+  Object.assign(SND, { ctx, master, bus, white, G, F, droneG, bkO, bkG, roadLP, roadG, hissBP, hissG, eng1, eng2, engG, windBP, windG, windHiG, rainS, rainG, trLG, trRG, hornG, tSend });
 }
 let gust = 1, gustT = 0, gustTo = 1;
 function sndUpdate(dt){
@@ -2206,6 +2322,10 @@ function sndUpdate(dt){
   for (const fl of flyers) if (fl.on) add(fl.x, fl.y, fl.z, fl.v + v, 1.2);
   set(S.trLG.gain, Math.min(0.7, L * 0.8), 0.05); set(S.trRG.gain, Math.min(0.7, Rr * 0.8), 0.05);
   set(S.tSend.gain, tun ? 0.55 : 0, 0.3);
+  if (BK.on && bikers[0].bike.visible){
+    const d = Math.hypot(BK.x - pose.x, BK.z - pose.z);
+    set(S.bkG.gain, 0.22 / (1 + (d / 10) ** 2)); set(S.bkO.frequency, 62 + BK.v * 2.4, 0.2);
+  } else set(S.bkG.gain, 0);
   set(S.droneG.gain, P.homeLeg && P.late ? 0.09 * clamp(P.s / 150, 0, 1) : 0, 1.2);
   if (P.homeLeg && !P.late && DAWN.k > 0.5 && Math.random() < dt * 1.4) sndChirp();
   /* after a crash, the road, wind and rain drop away under it */
@@ -2414,7 +2534,7 @@ function boot(data){
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => ({ count: P.count }));
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
-window.__nd = { P, pose, SND, DBG, DM, family, homeLights, startHomeLeg, LATE_T, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { SIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
+window.__nd = { P, pose, SND, BK, bikers, DBG, DM, family, homeLights, startHomeLeg, LATE_T, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { SIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
 </script>
 
 </body></html>
