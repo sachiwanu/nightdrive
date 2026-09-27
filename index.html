@@ -1456,14 +1456,15 @@ const family = (() => {
   }
 }
 
-/* anomaly: cars driving through the air, headlights on, coming toward you over the road */
+/* anomaly: cars driving through the air, going your way (never against you), a little slower
+   than you so you come up underneath them and pass */
 const flyers = [];
 for (let i = 0; i < 5; i++){
   const m = new THREE.Mesh(CAR_GEOS[(i*2 + 1) % CAR_GEOS.length], worldMat); m.visible = false; scene.add(m);
   flyers.push({ m, on: false, x: 0, y: 0, z: 0, v: 16, ph: Math.random() * 6 });
 }
 function spawnFlyer(f, x){
-  f.on = true; f.x = x; f.v = 13 + Math.random() * 6;
+  f.on = true; f.x = x; f.v = 12 + Math.random() * 5;
   if (Math.random() < 0.75){ f.y = 3.0 + Math.random() * 2.2; f.z = -4.5 + Math.random() * 9; }   /* just over the traffic on your own lanes */
   else { f.y = 7 + Math.random() * 6; f.z = -40 + Math.random() * 25; }                         /* out over the valley */
 }
@@ -1541,7 +1542,7 @@ function updateFrusta(){
   _pm.multiplyMatrices(mcam.projectionMatrix, mcam.matrixWorldInverse); _frR.setFromProjectionMatrix(_pm);
 }
 function unseen(c){
-  _sph.center.set(c.x, 1.2, c.z);
+  _sph.center.set(c.x, c.y !== undefined ? c.y : 1.2, c.z);
   return !_frM.intersectsSphere(_sph) && !_frR.intersectsSphere(_sph);
 }
 /* never grow a small shape into a car right on top of you */
@@ -1790,7 +1791,7 @@ function rollAnomaly(){
 function enterTunnel(){
   if (anomaly === 6 && !sameMode){ sameMode = true; for (const c of traffic) if (c.onc) placeOnc(c, true); }
   if (anomaly === 7) flyers.forEach((f, i) => spawnFlyer(f, TUN_B + 150 + i * 110 + Math.random() * 40));
-  if (anomaly === 15) runner.start(TUN_B + 300);
+  if (anomaly === 15) runner.start(TUN_B + 150);     /* close enough that you meet him soon after the tunnel */
   if (anomaly === 17) standCar();
   if (anomaly === 18 || anomaly === 19){
     /* everything out of sight changes and is spread along the road past the tunnel, a little
@@ -1810,11 +1811,13 @@ function enterTunnel(){
   if (anomaly === 20){ DM.on = true; daimonji.show(true); }
   spawnBiker();
 }
-/* he starts 110 m behind you in the tunnel (a headlight in the mirror), catches up in the lane
-   beside you, rides just ahead of you for a few seconds, then pulls away into the rain */
+/* he is already out there ahead of you, just past the tunnel, in the lane beside yours and
+   riding at a bit over half your speed - you come up behind him, draw level and pass */
 function spawnBiker(){
   const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 1 ? 2 : 1;
-  Object.assign(BK, { on: true, z: LANES[lane], x: pose.x - 110, v: P.v + 9, phase: 0, t: 0, mode: anomaly,
+  let x = TUN_B + 20;
+  for (let t = 0; t < 8 && !laneClear(lane, x, 25, 25, null); t++) x += 25;
+  Object.assign(BK, { on: true, z: LANES[lane], x, v: Math.max(8, 0.55 * P.v), phase: 0, t: 0, mode: anomaly,
                       scale: anomaly === 23 ? 2.2 : 1, twin: anomaly === 25 });
   bikers.forEach((bm, i) => {
     bm.g.visible = i === 0 || BK.twin;
@@ -1994,21 +1997,20 @@ function step(dt){
   updateTraffic(dt);
   for (const f of flyers){
     if (!f.on) continue;
-    f.x -= f.v * dt;
+    f.x += f.v * dt;
     /* once overhead it is out of every view: send it round again while the zone lasts */
-    if (f.x < pose.x - 10){ if (anomaly === 7 && pose.x + 360 < GANTRY_X) spawnFlyer(f, pose.x + 360 + Math.random() * 120); else f.on = false; }
+    /* once you have passed under it and it is out of both views, send it round ahead again */
+    if (f.x < pose.x - 10 && (unseen(f) || f.x < pose.x - 160)){ if (anomaly === 7 && pose.x + 360 < GANTRY_X) spawnFlyer(f, pose.x + 360 + Math.random() * 120); else f.on = false; }
   }
   if (BK.on){
     const dx = BK.x - pose.x;
-    /* he settles about 10 m ahead in the next lane (right in view through the windscreen),
-       keeps pace for five seconds, then goes */
-    if (BK.phase === 0 && dx > 2.5){ BK.phase = 1; BK.t = 0; }
-    if (BK.phase === 1 && (BK.t += dt) > 5) BK.phase = 2;
-    let target = Math.max(8, P.v + (BK.phase === 0 ? 9 : BK.phase === 1 ? 0.3 : 11));
+    /* slower than you whatever you do, so you always catch him */
+    let target = Math.max(8, 0.55 * P.v);
     for (const c of traffic) if (!c.onc && Math.abs(c.z - BK.z) < 2 && c.x > BK.x && c.x - BK.x < 16 + c.hl) target = Math.min(target, c.v);
-    BK.v += clamp(target - BK.v, -6 * dt, 4 * dt); BK.x += BK.v * dt; BK.wheel += BK.v * dt;
-    /* gone once well ahead in the fog, or once the zone is over and nobody sees him go */
-    if ((BK.phase === 2 && dx > 250) || ((P.onExit || P.x > FORK + 60) && (Math.abs(dx) > 230 || unseen(BK)))) hideBiker();
+    BK.v += clamp(target - BK.v, -9 * dt, 4 * dt); BK.x += BK.v * dt; BK.wheel += BK.v * dt;
+    /* gone once you have passed him and he has dropped out of the mirror, or once the zone is
+       over and nobody sees him go */
+    if ((dx < -30 && (unseen(BK) || dx < -200)) || ((P.onExit || P.x > FORK + 60) && (Math.abs(dx) > 230 || unseen(BK)))) hideBiker();
   }
   if (runner.on && runner.x > TUN_B + 6) runner.x = Math.max(TUN_B + 6, runner.x - 4.3 * dt);
 
@@ -2172,8 +2174,8 @@ function sync(){
     f.m.visible = f.on;
     if (!f.on) continue;
     const y = f.y + Math.sin(clock * 1.3 + f.ph) * 0.35;
-    f.m.position.set(f.x, y, f.z); f.m.rotation.set(0, Math.PI, Math.sin(clock * 0.9 + f.ph) * 0.03);
-    carLampGlows(f.x, y, f.z, Math.PI, 2.25, false, 0, false, 1, 1);
+    f.m.position.set(f.x, y, f.z); f.m.rotation.set(0, 0, Math.sin(clock * 0.9 + f.ph) * 0.03);
+    carLampGlows(f.x, y, f.z, 0, 2.25, false, 0, false, 1, 1);
   }
   bikers.forEach((bm, i) => {
     if (!BK.on || (i === 1 && !BK.twin)){ bm.g.visible = false; return; }
@@ -2320,7 +2322,7 @@ function sndUpdate(dt){
   };
   for (const c of traffic) add(c.x, 0, c.z, (c.onc ? (c.same ? c.v : -c.v) : c.v) - v, c.kind !== 'car' ? 0.12 : c.truck ? 1.8 : 1);
   if (followerOn && !P.homeLeg) add(fpose.x, fpose.y, fpose.z, 6, 1.3);
-  for (const fl of flyers) if (fl.on) add(fl.x, fl.y, fl.z, fl.v + v, 1.2);
+  for (const fl of flyers) if (fl.on) add(fl.x, fl.y, fl.z, fl.v - v, 1.2);
   set(S.trLG.gain, Math.min(0.7, L * 0.8), 0.05); set(S.trRG.gain, Math.min(0.7, Rr * 0.8), 0.05);
   set(S.tSend.gain, tun ? 0.55 : 0, 0.3);
   if (BK.on && bikers[0].bike.visible){
