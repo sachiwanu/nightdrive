@@ -103,6 +103,9 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 #start{width:100%;height:52px;border:0;border-radius:10px;background:var(--plate);color:var(--sign);
   font:900 20px/1 "Zen Kaku Gothic New",system-ui,sans-serif;letter-spacing:.14em;cursor:pointer;}
 #start:disabled{opacity:.6;cursor:progress;}
+#toTitle{width:100%;height:44px;margin-top:10px;border:1px solid var(--glass-edge);border-radius:10px;background:rgba(255,255,255,.06);
+  color:var(--ink);font:700 16px/1 "Zen Kaku Gothic New",system-ui,sans-serif;letter-spacing:.12em;cursor:pointer;}
+#toTitle:focus-visible{outline:3px solid var(--sodium);outline-offset:3px;}
 #start:focus-visible,#pause:focus-visible,#snd:focus-visible,.tb:focus-visible{outline:3px solid var(--sodium);outline-offset:3px;}
 #err{margin-top:10px;font-size:13px;color:#ffd7cf;}
 #over{position:fixed;inset:0;display:grid;place-items:center;padding:16px;
@@ -205,6 +208,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
       </tbody>
     </table>
     <button id="start" type="button" disabled>読み込み中…</button>
+    <button id="toTitle" type="button" hidden>タイトルに戻る</button>
     <div id="err" hidden></div>
     <div id="dbg" hidden>
       <p class="dbg-h">デバッグ</p>
@@ -1320,7 +1324,7 @@ const ORIG = {
   headP: SEC.heads.attributes.position.array.slice(), headC: SEC.heads.attributes.aCol.array.slice(), headE: SEC.heads.attributes.aEmi.array.slice(),
   glowP: SEC.glows.attributes.position.array.slice(), glowC: SEC.glows.attributes.aCol.array.slice(),
   tunC: SEC.tunLamps.attributes.aCol.array.slice(), tunGC: SEC.tunGlows.attributes.aCol.array.slice(),
-  edgeC: SEC.edges.attributes.aCol.array.slice(), medP: SEC.median.attributes.position.array.slice(), dashP: SEC.dashes.attributes.position.array.slice(),
+  edgeC: SEC.edges.attributes.aCol.array.slice(), edgeP: SEC.edges.attributes.position.array.slice(), medP: SEC.median.attributes.position.array.slice(), dashP: SEC.dashes.attributes.position.array.slice(),
 };
 
 /* the road home is fenced off with a "通行止め" barricade until the run earns it */
@@ -2131,10 +2135,16 @@ for (let i = 0; i < 5; i++){
   const m = new THREE.Mesh(CAR_GEOS[(i*2 + 1) % CAR_GEOS.length], worldMat); m.visible = false; scene.add(m);
   flyers.push({ m, on: false, x: 0, y: 0, z: 0, v: 16, ph: Math.random() * 6 });
 }
+/* low now (09-28): wheels about 2 m off the road - clear of cars, bikes and you, so over a lane
+   with no truck in it (a truck would drive through it) */
 function spawnFlyer(f, x){
-  f.on = true; f.x = x; f.v = 12 + Math.random() * 5;
-  if (Math.random() < 0.75){ f.y = 3.0 + Math.random() * 2.2; f.z = -4.5 + Math.random() * 9; }   /* just over the traffic on your own lanes */
-  else { f.y = 7 + Math.random() * 6; f.z = -40 + Math.random() * 25; }                         /* out over the valley */
+  f.on = true; f.x = x; f.v = 12 + Math.random() * 5; f.y = 2.0;
+  if (Math.random() < 0.75){
+    const tall = z => traffic.some(c => !c.onc && !c.parked && c.truck && Math.abs(c.z - z) < 2 && Math.abs(c.x - x) < 250)
+                   || (KT.on && Math.abs(KT.z - z) < 2);
+    const free = LANES.filter(z => !tall(z));
+    f.z = free.length ? free[Math.floor(Math.random() * free.length)] : -6.4;          /* over a lane, or the shoulder */
+  } else f.z = -40 + Math.random() * 25;                                                 /* out over the valley */
 }
 
 /* anomaly: someone running toward you along the verge, just outside the guardrail */
@@ -2280,8 +2290,8 @@ function updateTraffic(dt){
   for (const c of traffic){
     if (c.extra && !lineOn()){ c.parked = true; c.line = false; c.x = pose.x - 5000; c.z = LANES[0]; c.v = 0; continue; }
     if (c.parked){ joinLine(c); }
-    /* anomaly 47: hazards, switched on (and off again) only while nobody is looking */
-    if ((anomaly === 47) !== !!c.haz && (Math.abs(c.x - pose.x) > 230 || unseen(c))) c.haz = anomaly === 47;
+    /* anomaly 47: hazards on every car - switched on (and off) straight away, as a driver would */
+    c.haz = anomaly === 47;
     if (c.onc){
       if (c.same){
         c.v += clamp(c.vPref - c.v, -5*dt, 5*dt); c.x += c.v * dt; c.th = 0;
@@ -2295,6 +2305,9 @@ function updateTraffic(dt){
     }
     if (lineOn()){
       if (!c.line && !c.stand && c.kind === 'car' && c.lc === 0 && (Math.abs(c.x - pose.x) > 230 || (unseen(c) && roomToSwap(c)))) joinLine(c);
+      /* one still in sight and not yet in the queue gets out of the way - ahead speeds off, behind
+         drops back - so it can join the queue once the fog has it */
+      else if (!c.line && !c.stand) c.vPref = c.x > pose.x ? 42 : 12;
     } else if (c.line){ c.line = false; c.vPref = c.truck ? 21 + Math.random()*3 : 23 + Math.random()*6; c.timer = 5 + Math.random()*20; }
     if (c.line){
       const lx = ((c.x % SECTION) + SECTION) % SECTION;
@@ -2354,7 +2367,7 @@ function updateTraffic(dt){
       setKind(c, c.want);
       if (c.want === 'car') c.vPref = c.truck ? 21 + Math.random()*3 : 23 + Math.random()*6;
     }
-    /* the stood-up car goes back on its wheels the same way once its section is over */
+    /* the reversing car turns the right way round again the same way, once its section is over */
     if (c.stand && anomaly !== 17 && unseen(c) && roomToSwap(c)){ c.stand = false; setKind(c, c.want); c.vPref = 23 + Math.random()*6; }
     if (c.line){ if (c.x - pose.x < -200) joinLine(c); }       /* off the back of the queue: onto its far end */
     else if (c.x - pose.x > 720) placeSame(c, false);
@@ -2400,17 +2413,17 @@ function readInput(){
 const ANOMALIES = {
   1: 'ハンドルが船の舵になっている',   2: '街灯が全部赤い',                 3: '路肩に人が立っている',
   4: '出口の看板が鏡文字',             5: '街灯が1本だけ傾いている',         6: '対向車線の車が同じ向きに走っている',
-  7: '空中を走っている車が何台か見える', 8: '両端の白線が黄色になっている',   9: '路肩に人が何十人も並んでいる',
+  7: '空中を走っている車が何台か見える', 8: '両端の白線が黄色になっている',   9: '中央の塀の上に人が何十人も並んでいる',
   10: 'ルームミラーに後ろの席の人影',
   11: 'トンネルなのに雨がやまない',     12: 'トンネルの照明が点滅している',   13: 'トンネルの中に人が立っている',
-  15: '奥から人が走ってくる',           16: '速度計の桁が一桁増えている',   17: '車が立って走っている',
+  15: '奥から人が走ってくる',           16: '速度計の桁が一桁増えている',   17: '車がバックで走っている',
   18: '走っている車が自転車になっている', 19: '走っている車が人間のランナー（男女）になっている',
   20: '遠くの街の灯りが大文字焼きになっている',  21: '雨が漢字の「雨」になって降ってくる',
   22: 'バイクのおじさんが後ろ向きに乗っている', 23: 'バイクのおじさんが少し大きい',       24: 'バイクのおじさんがこちらをじっと見ている',
   25: 'バイクのおじさんが2人いる',             26: 'バイクのおじさんのバイクが無い',
   27: '中央の壁の高さが半分になっている',
   28: '中央の街灯がT字ではなく、少しY字になっている', 29: 'ほかの車がウインカーを出さずに車線変更する',
-  30: '白い点線の一本一本が少し短い',
+  30: '白い点線の一本一本が半分くらいの短さ',
   31: 'パトカーの赤色灯が青い',       32: 'パトカーの白と黒が逆',       33: 'パトカーの後ろに警官がしがみついている',
   34: 'パトカーがリムジンのように長い',  35: 'パトカーが前後にすごく短い',
   36: '分岐の看板の「本線」が「本物」になっている',
@@ -2421,6 +2434,7 @@ const ANOMALIES = {
   42: 'オービスが、車が前を通るたびにやたらパシャパシャ撮影する',
   43: 'トンネルの非常口がやたらたくさんある',
   44: 'トンネル手前の看板の「ラジオ」が「オジヤ」になっている',
+  49: '白線の太さが半分になっている',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
   46: 'トンネルの壁がストリートアート（スプレーの落書き）だらけ',
@@ -2437,8 +2451,8 @@ let noInd = false;                     // anomaly 29, while it is showing
    the zones that have an anomaly */
 const DIFF = {
   easy:   [1, 2, 7, 9, 12, 17, 18, 19, 21, 25, 26, 31, 33, 34, 35, 37, 39, 40, 42, 43, 46, 47],
-  medium: [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 32, 41, 45, 48],
-  hard:   [5, 10, 16, 20, 23, 28, 29, 30, 36, 38, 44],
+  medium: [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
+  hard:   [5, 10, 16, 20, 23, 28, 29, 36, 38, 44, 49],
 };
 const DIFF_SHARE = { easy: 0.225, medium: 0.41, hard: 0.365 };   /* 09-28: 5 points moved from hard to medium */
 const KT = { on: false, x: 0, z: 0, v: 0 };   // the 困った運輸 truck
@@ -2475,7 +2489,7 @@ function yLamps(a){
     for (let i = L.g0; i < L.g1; i++) rot(gp, i*3);
   }
 }
-/* anomaly 30: each dash of the lane lines a little shorter (0.7), about its own middle */
+/* anomaly 30: each dash of the lane lines half as long (8 m -> 4 m), about its own middle (0.7 was too hard to see, 09-28) */
 function shortDashes(k){
   const a = SEC.dashes.attributes.position.array;
   for (let q = 0; q < a.length; q += 18){
@@ -2483,6 +2497,19 @@ function shortDashes(k){
     for (let v = 0; v < 18; v += 3){ lo = Math.min(lo, a[q+v]); hi = Math.max(hi, a[q+v]); }
     const mid = (lo + hi) / 2;
     for (let v = 0; v < 18; v += 3) a[q+v] = mid + (a[q+v] - mid) * k;
+  }
+}
+/* anomaly 49: the white lines half as wide - the lane dashes and the two edge lines through the
+   zone - each quad narrowed about its own centre line */
+function thinLines(k){
+  for (const g of [SEC.dashes, SEC.edges]){
+    const a = g.attributes.position.array;
+    for (let q = 0; q + 18 <= a.length; q += 18){
+      let lo = 1e9, hi = -1e9;
+      for (let v = 2; v < 18; v += 3){ lo = Math.min(lo, a[q+v]); hi = Math.max(hi, a[q+v]); }
+      const mid = (lo + hi) / 2;
+      for (let v = 2; v < 18; v += 3) a[q+v] = mid + (a[q+v] - mid) * k;
+    }
   }
 }
 function tiltLamp(L, a){
@@ -2498,9 +2525,12 @@ function tiltLamp(L, a){
 function placePeople(n){
   let k = 0;
   const span = ZONE_B - ZONE_A;
-  const xs = n === 1 ? [ZONE_A + 60 + Math.random()*(span - 120)] : Array.from({ length: n }, (_, i) => ZONE_A + 20 + i*(span - 40)/(n - 1) + Math.random()*4);
+  /* one (anomaly 3) stands on the verge; the crowd (anomaly 9) stands along the top of the median
+     wall (0.9 m high) from the tunnel mouth to the end of the zone (09-28: was the verge too) */
+  const M0 = TUN_B + 15, M1 = ZONE_B;
+  const xs = n === 1 ? [ZONE_A + 60 + Math.random()*(span - 120)] : Array.from({ length: n }, (_, i) => M0 + i*(M1 - M0)/(n - 1) + Math.random()*3);
   for (const x of xs){
-    const onShoulder = x < DECEL_START - 5, z = onShoulder ? -5.75 : -10.0, y = onShoulder ? 0 : groundY(-10.0);
+    const onShoulder = x < DECEL_START - 5, z = n > 1 ? MEDIAN_Z : onShoulder ? -5.75 : -10.0, y = n > 1 ? 0.9 : onShoulder ? 0 : groundY(-10.0);
     for (const off of [0, SECTION]){   /* also in the next copy, so they are there as you leave the tunnel */
       vpos.set(x + off, y, z + (Math.random() - 0.5)*0.2); m4.compose(vpos, qFace, one); persons.setMatrixAt(k++, m4);
     }
@@ -2516,7 +2546,7 @@ function placeTunnelPerson(){
 function applyAnomaly(){
   /* start from a clean section */
   SEC.tunLamps.attributes.aCol.array.set(ORIG.tunC); SEC.tunGlows.attributes.aCol.array.set(ORIG.tunGC);
-  SEC.edges.attributes.aCol.array.set(ORIG.edgeC); SEC.median.attributes.position.array.set(ORIG.medP);
+  SEC.edges.attributes.aCol.array.set(ORIG.edgeC); SEC.edges.attributes.position.array.set(ORIG.edgeP); SEC.median.attributes.position.array.set(ORIG.medP);
   SEC.dashes.attributes.position.array.set(ORIG.dashP);
   SEC.poles.attributes.position.array.set(ORIG.poleP);
   SEC.heads.attributes.position.array.set(ORIG.headP); SEC.heads.attributes.aCol.array.set(ORIG.headC); SEC.heads.attributes.aEmi.array.set(ORIG.headE);
@@ -2533,13 +2563,14 @@ function applyAnomaly(){
   if (anomaly === 4) signMode.mirror = true;
   if (anomaly === 5) tiltLamp(pickLamp(), 16 * D2R);
   if (anomaly === 28) yLamps(12 * D2R);
-  if (anomaly === 30) shortDashes(0.7);
+  if (anomaly === 30) shortDashes(0.5);
+  if (anomaly === 49) thinLines(0.5);
   if (anomaly === 27){ const a = SEC.median.attributes.position.array; for (let i = 1; i < a.length; i += 3) a[i] *= 0.5; }   /* the wall stands on y = 0 */
   if (anomaly === 8){ const a = SEC.edges.attributes.aCol.array; for (let i = 0; i < a.length; i += 3){ a[i] = 0.95; a[i+1] = 0.74; a[i+2] = 0.0; } }
-  if (anomaly === 9) placePeople(28);
+  if (anomaly === 9) placePeople(32);   /* the instanced mesh holds 64 = 32 people in two copies */
   if (anomaly === 13) placeTunnelPerson();
   for (const a of [SEC.poles.attributes.position, SEC.heads.attributes.position, SEC.heads.attributes.aCol, SEC.heads.attributes.aEmi,
-                   SEC.glows.attributes.position, SEC.glows.attributes.aCol, SEC.tunLamps.attributes.aCol, SEC.tunGlows.attributes.aCol, SEC.edges.attributes.aCol, SEC.median.attributes.position, SEC.dashes.attributes.position]) a.needsUpdate = true;
+                   SEC.glows.attributes.position, SEC.glows.attributes.aCol, SEC.tunLamps.attributes.aCol, SEC.tunGlows.attributes.aCol, SEC.edges.attributes.aCol, SEC.edges.attributes.position, SEC.median.attributes.position, SEC.dashes.attributes.position]) a.needsUpdate = true;
   bakeLightmap();
   drawExitSign(P.count); drawMainSign(anomaly === 36 ? '本物' : '本線');
 }
@@ -2631,18 +2662,18 @@ function spawnKomatta(){
   u.rm.visible = anomaly !== 39;
 }
 function hideBiker(){ BK.on = false; for (const bm of bikers) bm.g.visible = false; }
-/* one of the cars on your side, stood up on its tail and crawling along at 43 km/h a little
+/* one of the cars on your side, turned round and reversing along at 43 km/h a little
    past the tunnel. Taken from the traffic furthest from you, so nothing visibly jumps. It is
    a car like any other: hit it and you are dead. */
 function standCar(){
   let c = null, bd = -1;
-  for (const o of traffic){ if (o.onc || o.truck || o.kind !== 'car') continue; const d = Math.abs(o.x - pose.x); if (d > bd){ bd = d; c = o; } }
+  for (const o of traffic){ if (o.onc || o.truck || o.extra || o.kind !== 'car') continue; const d = Math.abs(o.x - pose.x); if (d > bd){ bd = d; c = o; } }   /* never one of the parked extras */
   if (!c) return;
   for (let t = 0; t < 30; t++){
     const lane = Math.floor(Math.random() * 3), x = TUN_B + 90 + Math.random() * 50;
     if (laneClear(lane, x, 40, 40, c)){ c.lane = c.tgt = lane; c.z = LANES[lane]; c.x = x; break; }
   }
-  c.stand = true; c.hl = 0.65; c.vPref = c.v = 12; c.lc = 0; c.ind = 0;
+  c.stand = true; c.hl = c.hl0; c.vPref = c.v = 12; c.lc = 0; c.ind = 0;   /* (09-28: reversing now, not stood on its tail) */
 }
 /* past the fork the same-way cars drive off (ahead) or fall back (behind) and are replaced
    by ordinary oncoming traffic once the fog has them */
@@ -2948,7 +2979,9 @@ function step(dt){
 
   /* rain: stops under the tunnel roof. The beads already on the glass stay. */
   const inTunnel = !P.onExit && P.x > TUN_A + 3 && P.x < TUN_B - 3;
-  noInd = anomaly === 29 && !P.onExit && P.x > TUN_A && P.x < FORK + 80;
+  /* the whole zone, from 20 m short of its "1km" sign (the end of the section before, or at the very
+     start of a run, just behind 0) to the fork - not only from the tunnel, as it was (09-28) */
+  noInd = anomaly === 29 && !P.onExit && (P.x >= ZSIGN_X - 20 || (P.x >= ZSIGN_X - SECTION - 20 && P.x < FORK + 80));
   rainOn = (!inTunnel || rainInTun) && rainAmt > 0.01;
   const kanji = anomaly === 21 && !P.onExit && P.x > TUN_B && P.x < FORK + 80;
   rain.visible = rainOn && !kanji; kanjiRain.p.visible = rainOn && kanji;
@@ -2988,7 +3021,8 @@ function carLampGlows(x, y, z, th, hl, truck, ind, indOn, head, tail){
     if (front > 0){ const p = W(hl + 0.03, hy, s*lz); dglow(p[0], p[1], p[2], front, 0.95*front, 0.85*front, 0.75); dglow(p[0], p[1], p[2], 0.34*front, 0.32*front, 0.29*front, 3.4); }
   }
   if (ind && indOn) for (const sd of (ind === 2 ? [-1, 1] : [ind])) for (const e of [-1, 1]){   /* ind 2: hazards */
-    const p = W(e*(hl - 0.1), ty + 0.05, sd*(truck ? 1.25 : 0.91)); dglow(p[0], p[1], p[2], 1.0, 0.55, 0.05, 0.55); }
+    const p = W(e*(hl - 0.05), ty + 0.05, sd*(truck ? 1.25 : 0.95));   /* bright enough to read beside the tail lights (09-28) */
+    dglow(p[0], p[1], p[2], 1.3, 0.7, 0.06, 0.8); dglow(p[0], p[1], p[2], 0.4, 0.2, 0.02, 2.4); }
 }
 /* dawn on the road home: 0 = night, 1 = a bright morning by the time you reach the house */
 const NIGHT_AMB = WU.uAmb.value.clone(), DAWN = { k: -1 };
@@ -3155,10 +3189,9 @@ function sync(){
       continue;
     }
     if (c.stand){
-      /* stood on its tail: roof toward you, headlights up top, tail lights on the road */
-      const cs = Math.cos(c.th), sn = Math.sin(c.th);
-      c.mesh.position.set(c.x + 0.63*cs, 2.25, c.z + 0.63*sn); c.mesh.rotation.set(0, -c.th, Math.PI/2);
-      for (const s of [-0.62, 0.62]){ dglow(c.x, 4.52, c.z + s, 1.0, 0.95, 0.85, 0.7); dglow(c.x - 0.1, 0.05, c.z + s, 0.6, 0.05, 0.03, 0.45); }
+      /* anomaly 17: driving your way in reverse - turned round, its headlights looking back at you */
+      c.mesh.position.set(c.x, 0, c.z); c.mesh.rotation.set(0, -c.th + Math.PI, 0);
+      carLampGlows(c.x, 0, c.z, c.th + Math.PI, c.hl, c.truck, 0, false, 1, 1);
       continue;
     }
     c.mesh.position.set(c.x, 0, c.z); c.mesh.rotation.set(0, -c.th, 0);
@@ -3168,7 +3201,7 @@ function sync(){
   for (const f of flyers){
     f.m.visible = f.on;
     if (!f.on) continue;
-    const y = f.y + Math.sin(clock * 1.3 + f.ph) * 0.35;
+    const y = f.y + Math.sin(clock * 1.3 + f.ph) * 0.2;
     f.m.position.set(f.x, y, f.z); f.m.rotation.set(0, 0, Math.sin(clock * 0.9 + f.ph) * 0.03);
     carLampGlows(f.x, y, f.z, 0, 2.25, false, 0, false, 1, 1);
   }
@@ -3544,7 +3577,7 @@ function begin(){
   if (!DBG.mode) track('start');
   sndInit(); if (SND.ctx) SND.ctx.resume();
   sndBtn.hidden = false;
-  panel.hidden = true; running = true; pauseBtn.hidden = false;
+  panel.hidden = true; running = true; pauseBtn.hidden = false; $('toTitle').hidden = true;
   touchEl.hidden = !(isMobile || navigator.maxTouchPoints > 0);
   last = performance.now(); keepAwake();
   canvas.focus?.();
@@ -3614,11 +3647,14 @@ $('again').addEventListener('click', () => {
   resetRun();
   running = false; pauseBtn.hidden = true; touchEl.hidden = true;
   panel.hidden = false; startBtn.textContent = '出発'; startBtn.focus();
+  $('toTitle').hidden = true;
 });
+/* from the pause window: give up this run and go back to the title (the same as after an ending) */
+$('toTitle').addEventListener('click', () => $('again').click());
 pauseBtn.addEventListener('click', () => {
   running = false; panel.hidden = false; pauseBtn.hidden = true;
   if (SND.ctx) SND.ctx.suspend();
-  startBtn.textContent = '再開'; startBtn.focus();
+  startBtn.textContent = '再開'; startBtn.focus(); $('toTitle').hidden = false;
   for (const k in touch) touch[k] = 0;
 });
 addEventListener('keydown', e => { if (e.code === 'Escape' && running && !P.over && !P.ended) pauseBtn.click(); });
@@ -3632,7 +3668,7 @@ function boot(data){
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => ({ count: P.count }));
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
-window.__nd = { cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
+window.__nd = { cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, get noInd(){ return noInd; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
 </script>
 
 <script data-goatcounter="https://hachiban-ic.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
