@@ -208,6 +208,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <div id="err" hidden></div>
     <div id="dbg" hidden>
       <p class="dbg-h">デバッグ</p>
+      <button id="dbgHint" type="button">ミス解説モード（普通に遊んで、間違えたら見逃した異変を教える）</button>
       <button id="dbgAll" type="button">全異変確認モード（◀ ▶・十字キー左右・B/N キーで切替）</button>
       <div class="dbg-row"><select id="dbgSel" aria-label="確認する異変"></select><button id="dbgGo" type="button">この異変で走る</button></div>
       <button id="dbg8a" type="button">8番エリア → エンディング（異変なし＝本線が正解）</button>
@@ -2665,7 +2666,14 @@ function judgeAtFork(took){
     P.home = took ? 'exit' : 'main';
     (took ? barricade : barricadeM).g.visible = false;
   } else {
-    if (!right) P.mistakes++;
+    if (!right){
+      P.mistakes++;
+      /* debug: ミス解説モード - say what was missed */
+      if (DBG.mode === 'hint'){
+        DBG.last = anomaly ? `ミス：異変がありました ── ${ANOMALIES[anomaly]}（出口が正解）` : 'ミス：異変はありませんでした（本線が正解）';
+        showToast(DBG.last, 8000); dbgHud();
+      }
+    }
     P.count = right ? Math.min(P.count + 1, 8) : 0;
     P.best = Math.max(P.best, P.count);
   }
@@ -2707,9 +2715,9 @@ function startHomeLeg(){
   if (P.late){ for (const i of HOMELIT.lights) LIVE[i][5] = 0; bakeLightmap(); }
 }
 let toastT = 0;
-function showToast(msg){
+function showToast(msg, ms = 4000){
   const el = $('toast'); el.textContent = msg; el.hidden = false;
-  clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 4000);
+  clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, ms);
 }
 /* play counts for the GitHub Pages build (GoatCounter, no cookies): the page itself is counted by
    the script tag there; these add the start button and which ending was reached. Where the counter
@@ -3537,13 +3545,14 @@ function dbgHud(){
   dbgHudEl.hidden = false;
   const all = DBG.mode === 'all';
   $('dbgPrev').hidden = $('dbgNext').hidden = !all;
+  if (DBG.mode === 'hint'){ dbgTxt.textContent = DBG.last || 'ミス解説モード：間違えると、見逃した異変をここに出します'; return; }
   if (all){
     const i = (DBG.idx - 1 + ANOM_IDS.length) % ANOM_IDS.length;
     dbgTxt.textContent = `異変 ${i + 1}/${ANOM_IDS.length}（No.${anomaly}）${ANOMALIES[anomaly]}`;
   } else dbgTxt.textContent = (DBG.mode[0] === 'e' ? `エンディング${DBG.mode[1]}確認・` : '') + (anomaly ? `8番エリア・異変あり（出口が正解）：${ANOMALIES[anomaly]}` : '8番エリア・異変なし（本線が正解）');
 }
 function dbgStart(mode){
-  DBG.mode = mode; DBG.idx = 0;
+  DBG.mode = mode; DBG.idx = 0; DBG.last = '';
   resetRun(); dbgHud(); begin();
 }
 function dbgJump(d){
@@ -3555,6 +3564,7 @@ function dbgJump(d){
   if (!running && !P.over && !P.ended) begin();
 }
 $('dbgAll').addEventListener('click', () => dbgStart('all'));
+$('dbgHint').addEventListener('click', () => dbgStart('hint'));
 $('dbg8a').addEventListener('click', () => dbgStart('8a'));
 $('dbg8b').addEventListener('click', () => dbgStart('8b'));
 for (const k of [1, 2, 3, 4]) $('dbgE' + k).addEventListener('click', () => dbgStart('e' + k));
