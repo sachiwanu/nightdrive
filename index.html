@@ -1770,7 +1770,7 @@ function sync(){
    the car behind, the crash. The context starts on the first tap, as browsers require. */
 const SND = { ctx: null, on: true };
 try { SND.on = localStorage.getItem('nd-sound') !== 'off'; } catch (_) {}
-const SND_VOL = 0.6;                   // a little under full, as asked
+const SND_VOL = 0.28;                  // quieter than full, as asked (0.9 -> 0.6 -> 0.4 -> 0.28)
 function sndInit(){
   if (SND.ctx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
