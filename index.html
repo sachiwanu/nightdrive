@@ -178,7 +178,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 <div id="panel">
   <div class="sign intro" role="dialog" aria-labelledby="ttl">
     <h1 id="ttl">8番インターチェンジ</h1>
-    <p class="rule">異変が無ければ<b>左の出口</b>へ。<br>あると思ったら、出ずに<b>本線</b>を進む。</p>
+    <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
     <table class="keys">
       <thead><tr><th></th><th>アクセル</th><th>ブレーキ</th><th>ハンドル</th></tr></thead>
@@ -194,9 +194,9 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
       <p class="dbg-h">デバッグ</p>
       <button id="dbgAll" type="button">全異変確認モード（◀ ▶・十字キー左右・B/N キーで切替）</button>
       <div class="dbg-row"><select id="dbgSel" aria-label="確認する異変"></select><button id="dbgGo" type="button">この異変で走る</button></div>
-      <button id="dbg8a" type="button">8番エリア → エンディング（異変なし＝出口が正解）</button>
-      <button id="dbg8b" type="button">8番エリア → エンディング（異変あり＝本線が正解）</button>
-      <button id="dbg8late" type="button">8番エリア → 遅すぎた帰宅のエンディング（異変なし）</button>
+      <button id="dbg8a" type="button">8番エリア → エンディング（異変なし＝本線が正解）</button>
+      <button id="dbg8b" type="button">8番エリア → エンディング（異変あり＝出口が正解）</button>
+      <button id="dbg8late" type="button">8番エリア → 遅すぎた帰宅のエンディング（異変なし＝本線）</button>
     </div>
   </div>
 </div>
@@ -1848,11 +1848,12 @@ function endZone(){
 /* ---------------------------------------------------------------- rules */
 const crashEl = $('crash'), causeEl = $('cause'), kmhEl = $('kmh');
 function die(cause){ if (P.dead) return; P.dead = true; P.deadT = 0; causeEl.textContent = cause; crashEl.hidden = false; sndCrash(P.rearHit); }
-/* Judged the moment you pass the fork. No anomaly: take the exit. An anomaly: stay on the
-   main line. At 8番出口, taking the exit on a clean section opens the road home instead. */
+/* Judged the moment you pass the fork. An anomaly: take the exit and turn back. No anomaly:
+   carry straight on along the main line. (Swapped 09-27 - it used to be the other way round.)
+   At 8番出口 the right answer, either way, opens the road home on that side. */
 function judgeAtFork(took){
   P.sections++;
-  const right = took === (anomaly === 0);
+  const right = took === (anomaly !== 0);
   if (right && P.count >= 8){
     /* 8番出口: whichever way was right, its road home opens - off the loop, or off the main line */
     P.home = took ? 'exit' : 'main';
@@ -2475,7 +2476,7 @@ function dbgHud(){
   if (all){
     const i = (DBG.idx - 1 + ANOM_IDS.length) % ANOM_IDS.length;
     dbgTxt.textContent = `異変 ${i + 1}/${ANOM_IDS.length}（No.${anomaly}）${ANOMALIES[anomaly]}`;
-  } else dbgTxt.textContent = anomaly ? `8番エリア・異変あり（本線が正解）：${ANOMALIES[anomaly]}` : '8番エリア・異変なし（出口が正解）' + (DBG.mode === '8late' ? '・遅い帰宅' : '');
+  } else dbgTxt.textContent = anomaly ? `8番エリア・異変あり（出口が正解）：${ANOMALIES[anomaly]}` : '8番エリア・異変なし（本線が正解）' + (DBG.mode === '8late' ? '・遅い帰宅' : '');
 }
 function dbgStart(mode){
   DBG.mode = mode; DBG.idx = 0;
