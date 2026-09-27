@@ -2723,12 +2723,27 @@ function showToast(msg, ms = 4000){
    the script tag there; these add the start button and which ending was reached. Where the counter
    is not loaded (the Artifact, local files) this does nothing. */
 function track(name){ try { window.goatcounter?.count?.({ path: name, title: name, event: true }); } catch (e) {} }
+/* play time: GoatCounter only counts, so the time goes in as milestones - each is counted once a
+   page visit, the moment the total time spent driving (pauses left out) reaches it - and, at an
+   ending, the time the run took, in bands */
+const PLAY = { t: 0, next: 0 }, PLAY_MIN = [1, 3, 5, 10, 15, 20, 30, 45, 60];
+function playClock(dt){
+  if (DBG.mode) return;
+  PLAY.t += dt;
+  while (PLAY.next < PLAY_MIN.length && PLAY.t >= PLAY_MIN[PLAY.next] * 60) track(`play-${PLAY_MIN[PLAY.next++]}min`);
+}
+function clearBand(sec){
+  const m = sec / 60, B = [10, 15, 20, 30, 45, 60];
+  if (m < B[0]) return `clear-under-${B[0]}min`;
+  for (let i = 1; i < B.length; i++) if (m < B[i]) return `clear-${B[i - 1]}-${B[i]}min`;
+  return `clear-over-${B[B.length - 1]}min`;
+}
 function showEnding(){
   P.ended = true; running = false;
   pauseBtn.hidden = true; touchEl.hidden = true;
   endEl.classList.toggle('late', P.late);
   $('endNo').textContent = `エンディング ${P.endingNo} / 4`;
-  if (!DBG.mode) track(`ending-${P.endingNo}`);
+  if (!DBG.mode){ track(`ending-${P.endingNo}`); track(clearBand(P.runT)); }
   $('endTtl').textContent = ['', 'ただいま。', '……ただいま。', '……ただいま。', '……。'][P.endingNo];
   $('endMiss').textContent = P.mistakes; $('endCrash').textContent = P.crashes;
   const t = Math.round(P.runT), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
@@ -2779,7 +2794,7 @@ function resetRun(){
 }
 
 function step(dt){
-  clock += dt;
+  clock += dt; playClock(dt);
   yawBlend *= Math.exp(-dt * 5);
   const inp = readInput();
   lastThr = P.dead ? 0 : inp.thr;
