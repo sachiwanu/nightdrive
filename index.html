@@ -747,7 +747,7 @@ function buildSection(){
   const dash = (z, x0, x1, d, g, w) => { for (let x = x0; x < x1; x += d + g){ const xe = Math.min(x + d, x1); Wb(x).hq(x, xe, z - w/2, z + w/2, LY, COL.line); } };
   /* the two edge lines through the watch zone go in a mesh of their own, so an anomaly can
      turn them yellow */
-  const edgeB = new B();
+  const edgeB = new B(), medB = new B();   /* the zone's stretch of median wall, kept apart for an anomaly */
   const solid = (z, x0, x1, w, zoned) => { for (let x = x0; x < x1; x += 50){ const xe = Math.min(x + 50, x1);
     (zoned && x >= TUN_A && xe <= GANTRY_X + 40 ? edgeB : Wb(x)).hq(x, xe, z - w/2, z + w/2, LY, COL.line); } };
   const edgeFn = (f, x0, x1) => { for (let x = x0; x < x1; x += 10){ const xe = Math.min(x + 10, x1), za = f(x) + 0.35, zb = f(xe) + 0.35;
@@ -775,7 +775,8 @@ function buildSection(){
   guard(lineOf(HM_FORK + 32, SECTION, () => -6.4));
   guard(lineOf(0, TUN_A - 1, () => 24.3));
   guard(lineOf(TUN_B + 1, SECTION, () => 24.3));
-  for (const [a, b] of [[0, TUN_A - 0.5], [TUN_B + 0.5, SECTION]]) for (let x = a; x < b; x += 50){ const xe = Math.min(x + 50, b); Wb(x).box((x + xe)/2, 0.45, MEDIAN_Z, xe - x, 0.9, 0.6, COL.concrete); }
+  for (const [a, b] of [[0, TUN_A - 0.5], [TUN_B + 0.5, SECTION]]) for (let x = a; x < b; x += 50){ const xe = Math.min(x + 50, b);
+    (x >= TUN_B && xe <= GANTRY_X + 60 ? medB : Wb(x)).box((x + xe)/2, 0.45, MEDIAN_Z, xe - x, 0.9, 0.6, COL.concrete); }
 
   /* street lamps: emissive heads, a halo sprite, and a pool in the light map. Poles and heads
      go into their own meshes with recorded ranges, so one lamp can be killed, tilted or
@@ -1033,6 +1034,7 @@ function buildSection(){
   poles.frustumCulled = heads.frustumCulled = false;
   g.add(poles); g.add(heads);
   const edges = new THREE.Mesh(edgeB.geo(), worldMat); edges.frustumCulled = false; g.add(edges);
+  const median = new THREE.Mesh(medB.geo(), worldMat); median.frustumCulled = false; g.add(median);
   g.add(new THREE.Mesh(signExit.geo(), mapMat(exitTex)));
   g.add(new THREE.Mesh(signMain.geo(), mapMat(mainTex)));
   g.add(new THREE.Mesh(chev.geo(), mapMat(chevTex)));
@@ -1048,7 +1050,7 @@ function buildSection(){
   const pts = new THREE.Points(gg, glowMat); pts.frustumCulled = false; g.add(pts);
   const tpts = new THREE.Points(tg, tunGlowMat); tpts.frustumCulled = false; g.add(tpts);
   const tunMesh = new THREE.Mesh(tunB.geo(), tunLampMat); g.add(tunMesh);
-  return { g, poles: poles.geometry, heads: heads.geometry, edges: edges.geometry, glows: gg, tunLamps: tunMesh.geometry, tunGlows: tg, TL0, TL1 };
+  return { g, poles: poles.geometry, heads: heads.geometry, edges: edges.geometry, median: median.geometry, glows: gg, tunLamps: tunMesh.geometry, tunGlows: tg, TL0, TL1 };
 }
 const SEC = buildSection();
 /* the house lights live outside the repeated section: the house is only ever visited in the
@@ -1073,7 +1075,7 @@ const ORIG = {
   headP: SEC.heads.attributes.position.array.slice(), headC: SEC.heads.attributes.aCol.array.slice(), headE: SEC.heads.attributes.aEmi.array.slice(),
   glowP: SEC.glows.attributes.position.array.slice(), glowC: SEC.glows.attributes.aCol.array.slice(),
   tunC: SEC.tunLamps.attributes.aCol.array.slice(), tunGC: SEC.tunGlows.attributes.aCol.array.slice(),
-  edgeC: SEC.edges.attributes.aCol.array.slice(),
+  edgeC: SEC.edges.attributes.aCol.array.slice(), medP: SEC.median.attributes.position.array.slice(),
 };
 
 /* the road home is fenced off with a "通行止め" barricade until the run earns it */
@@ -1699,14 +1701,23 @@ const ANOMALIES = {
   15: '奥から人が走ってくる',           16: '速度計の桁が一桁増えている',   17: '車が立って走っている',
   18: '走っている車が自転車になっている', 19: '走っている車が人間のランナー（男女）になっている',
   20: '遠くの街の灯りが大文字焼きになっている',  21: '雨が漢字の「雨」になって降ってくる',
-  22: 'バイクのおじさんが後ろ向きに乗っている', 23: 'バイクのおじさんが巨大',       24: 'バイクのおじさんがこちらをじっと見ている',
+  22: 'バイクのおじさんが後ろ向きに乗っている', 23: 'バイクのおじさんが少し大きい',       24: 'バイクのおじさんがこちらをじっと見ている',
   25: 'バイクのおじさんが2人いる',             26: 'バイクのおじさんのバイクが無い',
+  27: '中央の壁の高さが半分になっている',
 };
 const DM = { on: false, k: 0 };        // anomaly 20: the 大 on the far hill, and how lit it is
 const ANOM_IDS = Object.keys(ANOMALIES).map(Number);
 /* the man on the motorbike passes you in every zone. For the first three zones he is always
    the same, so you learn him; from the fourth on, he can be the anomaly. */
 const BIKER_IDS = [22, 23, 24, 25, 26];
+/* how easy each one is to spot (see the list in DESIGN.md), and the share of each kind among
+   the zones that have an anomaly */
+const DIFF = {
+  easy:   [1, 2, 7, 9, 12, 17, 18, 19, 21, 25, 26],
+  medium: [3, 4, 6, 8, 11, 13, 15, 22, 24, 27],
+  hard:   [5, 10, 16, 20, 23],
+};
+const DIFF_SHARE = { easy: 0.225, medium: 0.36, hard: 0.415 };
 const BK = { on: false, x: 0, z: 0, v: 0, phase: 0, t: 0, wheel: 0, scale: 1, mode: 0, twin: false };
 let anomaly = 0, sameMode = false, pendingRoll = false, rainInTun = false, tunFlick = false, tunK = 1, flickT = 0, flickOn = true;
 const inZone = () => !P.onExit && P.x >= ZONE_A && P.x < FORK;
@@ -1753,7 +1764,7 @@ function placeTunnelPerson(){
 function applyAnomaly(){
   /* start from a clean section */
   SEC.tunLamps.attributes.aCol.array.set(ORIG.tunC); SEC.tunGlows.attributes.aCol.array.set(ORIG.tunGC);
-  SEC.edges.attributes.aCol.array.set(ORIG.edgeC);
+  SEC.edges.attributes.aCol.array.set(ORIG.edgeC); SEC.median.attributes.position.array.set(ORIG.medP);
   SEC.poles.attributes.position.array.set(ORIG.poleP);
   SEC.heads.attributes.position.array.set(ORIG.headP); SEC.heads.attributes.aCol.array.set(ORIG.headC); SEC.heads.attributes.aEmi.array.set(ORIG.headE);
   SEC.glows.attributes.position.array.set(ORIG.glowP); SEC.glows.attributes.aCol.array.set(ORIG.glowC);
@@ -1768,19 +1779,30 @@ function applyAnomaly(){
   if (anomaly === 3) placePeople(1);
   if (anomaly === 4) signMode.mirror = true;
   if (anomaly === 5) tiltLamp(pickLamp(), 16 * D2R);
+  if (anomaly === 27){ const a = SEC.median.attributes.position.array; for (let i = 1; i < a.length; i += 3) a[i] *= 0.5; }   /* the wall stands on y = 0 */
   if (anomaly === 8){ const a = SEC.edges.attributes.aCol.array; for (let i = 0; i < a.length; i += 3){ a[i] = 0.95; a[i+1] = 0.74; a[i+2] = 0.0; } }
   if (anomaly === 9) placePeople(28);
   if (anomaly === 13) placeTunnelPerson();
   for (const a of [SEC.poles.attributes.position, SEC.heads.attributes.position, SEC.heads.attributes.aCol, SEC.heads.attributes.aEmi,
-                   SEC.glows.attributes.position, SEC.glows.attributes.aCol, SEC.tunLamps.attributes.aCol, SEC.tunGlows.attributes.aCol, SEC.edges.attributes.aCol]) a.needsUpdate = true;
+                   SEC.glows.attributes.position, SEC.glows.attributes.aCol, SEC.tunLamps.attributes.aCol, SEC.tunGlows.attributes.aCol, SEC.edges.attributes.aCol, SEC.median.attributes.position]) a.needsUpdate = true;
   bakeLightmap();
   drawExitSign(P.count);
 }
 function rollAnomaly(){
   if (DBG.mode === 'all'){ anomaly = ANOM_IDS[DBG.idx]; DBG.idx = (DBG.idx + 1) % ANOM_IDS.length; applyAnomaly(); dbgHud(); return; }
   /* 6 in 10 sections have one - the figure usually quoted for the original 8番出口 */
+  /* 6 zones in 10 have one. Which kind is weighted by how easy it is to spot: easy ones were
+     coming up in about 27 % of zones, so they are halved and the hard ones take the difference
+     (per zone: easy 13.5 %, medium 21.6 %, hard 24.9 %). The man on the motorbike joins the
+     pool from the fourth zone. */
   const pool = P.sections >= 3 ? ANOM_IDS : ANOM_IDS.filter(id => !BIKER_IDS.includes(id));
-  anomaly = Math.random() < 0.6 ? pool[Math.floor(Math.random() * pool.length)] : 0;
+  anomaly = 0;
+  if (Math.random() < 0.6){
+    const q = Math.random(), cls = q < DIFF_SHARE.easy ? 'easy' : q < DIFF_SHARE.easy + DIFF_SHARE.medium ? 'medium' : 'hard';
+    let list = DIFF[cls].filter(id => pool.includes(id));
+    if (!list.length) list = pool;
+    anomaly = list[Math.floor(Math.random() * list.length)];
+  }
   applyAnomaly();
   /* bikes / runners next: clear the cars from around you now, so by the tunnel almost all
      of them are far enough away to change unseen */
@@ -1818,7 +1840,7 @@ function spawnBiker(){
   let x = TUN_B + 20;
   for (let t = 0; t < 8 && !laneClear(lane, x, 25, 25, null); t++) x += 25;
   Object.assign(BK, { on: true, z: LANES[lane], x, v: Math.max(8, 0.55 * P.v), phase: 0, t: 0, mode: anomaly,
-                      scale: anomaly === 23 ? 2.2 : 1, twin: anomaly === 25 });
+                      scale: anomaly === 23 ? 1.2 : 1, twin: anomaly === 25 });
   bikers.forEach((bm, i) => {
     bm.g.visible = i === 0 || BK.twin;
     bm.bike.visible = anomaly !== 26;
