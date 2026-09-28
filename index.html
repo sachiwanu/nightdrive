@@ -1449,7 +1449,7 @@ const orbSitters = (() => {
     b.box(0.08, y + 0.1, z, 0.36, 0.2, 0.38, tr);                                       /* hips */
     b.box(0.05, y + 0.46, z, 0.24, 0.54, 0.4, sh);                                      /* body */
     b.box(0.08, y + 0.86, z, 0.19, 0.24, 0.18, skin, 0.05); addFace(b, 0.176, y + 0.86, z, 1);
-    b.box(0.05, y + 0.98, z, 0.21, 0.08, 0.2, hair);
+    b.box(0.05, y + 0.98, z, 0.21, 0.08, 0.2, hair); b.box(0.0, y + 0.9, z, 0.06, 0.2, 0.2, hair);   /* back of the head */
     for (const s of [-0.1, 0.1]){
       b.box(0.42, y + 0.08, z + s, 0.5, 0.14, 0.14, tr);                               /* thighs out over the edge */
       b.box(0.7, y - 0.2, z + s, 0.13, 0.52, 0.13, tr);                                /* shins hanging down */
@@ -1512,7 +1512,7 @@ const persons = (() => {
   for (const z of [-0.27, 0.27]) b.box(0, 1.12, z, 0.1, 0.62, 0.1, cloth);
   b.box(0, 1.58, 0, 0.19, 0.24, 0.18, skin, 0.05);      /* a pale face that just about shows in the dark */
   addFace(b, 0.101, 1.58);
-  b.box(-0.02, 1.66, 0, 0.21, 0.1, 0.2, [0.03, 0.03, 0.035]);
+  b.box(-0.02, 1.66, 0, 0.21, 0.1, 0.2, [0.03, 0.03, 0.035]); b.box(-0.08, 1.54, 0, 0.05, 0.14, 0.19, [0.03, 0.028, 0.025]);   /* hair below the helmet */
   const m = new THREE.InstancedMesh(b.geo(), worldMat, 64);
   m.count = 0; m.frustumCulled = false; scene.add(m);
   return m;
@@ -1772,11 +1772,25 @@ const ARMS = [];
     const palm = cabMesh(new THREE.BoxGeometry(0.075, 0.095, 0.05), skin);
     const thumb = cabMesh(new THREE.BoxGeometry(0.025, 0.05, 0.025), skin); thumb.position.set(0, 0, -0.03);
     hand.add(palm, thumb); hand.rotation.z = t; stdWheel.add(hand);
+    /* anomaly 50: the same hands gone to a zombie's - grey-green, bruised, bony, long dark nails */
+    const ZS = [0.34, 0.42, 0.28], ROT = [0.16, 0.12, 0.1], zh = new THREE.Group();
+    const zpalm = cabMesh(new THREE.BoxGeometry(0.07, 0.09, 0.048), ZS); zh.add(zpalm);
+    for (let f = 0; f < 4; f++){
+      const fg = cabMesh(new THREE.BoxGeometry(0.016, 0.018, 0.075), [0.3, 0.36, 0.24]); fg.position.set(0.028, -0.03 + f * 0.02, -0.045); zh.add(fg);
+      const nl = cabMesh(new THREE.BoxGeometry(0.014, 0.012, 0.03), [0.06, 0.05, 0.04]); nl.position.set(0.028, -0.03 + f * 0.02, -0.095); zh.add(nl);
+    }
+    const bruise = cabMesh(new THREE.BoxGeometry(0.03, 0.035, 0.052), ROT); bruise.position.set(-0.012, 0.015, 0.002); zh.add(bruise);
+    zh.visible = false; hand.add(zh);
+    const zfore = cabMesh(new THREE.CylinderGeometry(0.026, 0.032, 1, 8), ZS);
+    for (const [yy, ang] of [[-0.2, 0.4], [0.15, 2.4], [0.3, 4.2]]){
+      const w = cabMesh(new THREE.BoxGeometry(0.03, 0.12, 0.02), ROT); w.position.set(Math.cos(ang) * 0.027, yy, Math.sin(ang) * 0.027); w.rotation.y = -ang; zfore.add(w);
+    }
+    zfore.visible = false; car.add(zfore);
     const fore = cabMesh(new THREE.CylinderGeometry(0.03, 0.036, 1, 10), skin);
     const cuff = cabMesh(new THREE.CylinderGeometry(0.048, 0.048, 1, 10), sleeve);
     const upper = cabMesh(new THREE.CylinderGeometry(0.05, 0.055, 1, 10), sleeve);
     car.add(fore, cuff, upper);
-    ARMS.push({ hand, fore, cuff, upper, elbow: new THREE.Vector3(...elbow), shoulder: new THREE.Vector3(-0.3, 0.98, elbow[2] < 0.35 ? 0.12 : 0.58) });
+    ARMS.push({ hand, fore, cuff, upper, palm, thumb, zh, zfore, elbow: new THREE.Vector3(...elbow), shoulder: new THREE.Vector3(-0.3, 0.98, elbow[2] < 0.35 ? 0.12 : 0.58) });
   }
 })();
 const _hv = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _d = new THREE.Vector3();
@@ -1792,6 +1806,9 @@ function updateArms(){
     A.hand.visible = stdWheel.visible;
     A.hand.getWorldPosition(_hv); car.worldToLocal(_hv);
     aimLimb(A.fore, A.elbow, _hv, 0.3, 0.93); aimLimb(A.cuff, A.elbow, _hv, 0, 0.32); aimLimb(A.upper, A.shoulder, A.elbow);
+    const zom = anomaly === 50 && inZone();
+    A.zfore.visible = A.zh.visible = zom; A.fore.visible = A.palm.visible = A.thumb.visible = !zom;
+    if (zom){ A.zfore.position.copy(A.fore.position); A.zfore.quaternion.copy(A.fore.quaternion); A.zfore.scale.copy(A.fore.scale); }
   }
   METER.t += 1;
   if (METER.t % 5 === 1){
@@ -2011,7 +2028,7 @@ const backseat = (() => {
   b.box(0, 1.0, 0, 0.3, 0.52, 0.46, dark, 0.02);
   b.box(0, 1.39, 0, 0.2, 0.25, 0.19, [0.4, 0.35, 0.31], 0.08);
   addFace(b, 0.106, 1.39);
-  b.box(-0.02, 1.49, 0, 0.22, 0.09, 0.21, [0.02, 0.02, 0.025]);
+  b.box(-0.02, 1.49, 0, 0.22, 0.09, 0.21, [0.02, 0.02, 0.025]); b.box(-0.08, 1.38, 0, 0.05, 0.16, 0.19, [0.03, 0.028, 0.025]);   /* back of the head */
   const m = new THREE.Mesh(b.geo(), worldMat);
   m.position.set(-5.0, 0, 0.25); m.visible = false; car.add(m);
   return m;
@@ -2109,7 +2126,7 @@ function bikeModel(k){
   tube(b, 0.42, 0.9, 0.38, 1.04, 0.04, metal); b.box(0.38, 1.04, 0, 0.04, 0.04, 0.52, metal);
   b.box(-0.12, 0.88, 0, 0.24, 0.05, 0.12, dark);
   b.box(0.05, 1.19, 0, 0.56, 0.22, 0.36, shirt, 0, 1, 0, 1.0);                  /* rider, leaning onto the bars */
-  b.box(0.31, 1.6, 0, 0.2, 0.22, 0.18, skin, 0.05); b.box(0.29, 1.72, 0, 0.27, 0.1, 0.23, frameC);
+  b.box(0.31, 1.6, 0, 0.2, 0.22, 0.18, skin, 0.05); b.box(0.235, 1.63, 0, 0.06, 0.18, 0.19, [0.03, 0.028, 0.025]); b.box(0.29, 1.72, 0, 0.27, 0.1, 0.23, frameC);
   addFace(b, 0.416, 1.58, 0, 0.9);
   for (const z of [-0.2, 0.2]) tube(b, 0.18, 1.4, 0.38, 1.04, 0.08, shirt, z);
   g.add(new THREE.Mesh(b.geo(), worldMat));
@@ -2126,7 +2143,8 @@ function personModel(female, shirt, opt = {}){
     b.box(0, 1.14, 0, 0.22, 0.6, female ? 0.36 : 0.4, shirt); b.box(0, 0.8, 0, 0.22, 0.14, female ? 0.34 : 0.36, shorts);
     b.box(0, 1.58, 0, 0.19, 0.24, 0.18, skin, 0.05); addFace(b, 0.101, 1.58, 0, 1, opt.mood);
     if (female){ b.box(-0.03, 1.67, 0, 0.23, 0.1, 0.21, hair); b.box(-0.12, 1.5, 0, 0.07, 0.3, 0.19, hair); b.box(-0.2, 1.54, 0, 0.1, 0.24, 0.08, hair); }
-    else b.box(-0.02, 1.67, 0, 0.21, 0.08, 0.2, hair);
+    else { b.box(-0.02, 1.67, 0, 0.21, 0.08, 0.2, hair); b.box(-0.075, 1.59, 0, 0.06, 0.2, 0.2, hair);   /* back of the head */
+      for (const s of [-1, 1]) b.box(-0.03, 1.63, s * 0.095, 0.1, 0.1, 0.014, hair); }
   }));
   const limb = (py, pz, len, w, col) => { const piv = new THREE.Group(); piv.position.set(0, py, pz); piv.add(mk(b => b.box(0, -len/2, 0, w, len, w, col))); r.add(piv); return piv; };
   const legCol = opt.trousers || skin;          /* long trousers, or bare legs under shorts */
@@ -2407,6 +2425,7 @@ const gaya = (() => {
   head.add(mk(b => {
     b.box(0, 0.1, 0, 0.19, 0.24, 0.18, SKIN, 0.05); addFace(b, 0.096, 0.1, 0, 1);
     b.box(-0.01, 0.24, 0, 0.22, 0.08, 0.21, BLACK);                               /* cap */
+    b.box(-0.075, 0.12, 0, 0.06, 0.17, 0.2, [0.03, 0.028, 0.025]);                /* hair under it, at the back */
     b.box(0.14, 0.21, 0, 0.1, 0.02, 0.19, BLACK);                                 /* its peak */
   }));
   g.add(head);
@@ -2477,7 +2496,7 @@ const runner = (() => {
   const mk = fill => { const b = new B(); fill(b); return new THREE.Mesh(b.geo(), worldMat); };
   const g = new THREE.Group(), r = new THREE.Group();
   g.rotation.y = Math.PI; r.rotation.z = -0.14; g.add(r); g.visible = false; scene.add(g);
-  r.add(mk(b => { b.box(0, 1.14, 0, 0.24, 0.62, 0.42, shirt); b.box(0, 1.58, 0, 0.19, 0.24, 0.18, skin, 0.05); b.box(-0.02, 1.66, 0, 0.21, 0.1, 0.2, [0.03, 0.03, 0.035]); addFace(b, 0.101, 1.58); }));
+  r.add(mk(b => { b.box(0, 1.14, 0, 0.24, 0.62, 0.42, shirt); b.box(0, 1.58, 0, 0.19, 0.24, 0.18, skin, 0.05); b.box(-0.02, 1.66, 0, 0.21, 0.1, 0.2, [0.03, 0.03, 0.035]); b.box(-0.075, 1.59, 0, 0.06, 0.2, 0.2, [0.03, 0.03, 0.035]); addFace(b, 0.101, 1.58); }));
   const limb = (py, pz, len, w, col) => { const piv = new THREE.Group(); piv.position.set(0, py, pz); piv.add(mk(b => b.box(0, -len/2, 0, w, len, w, col))); r.add(piv); return piv; };
   const legs = [limb(0.84, -0.1, 0.84, 0.14, cloth), limb(0.84, 0.1, 0.84, 0.14, cloth)];
   const arms = [limb(1.42, -0.27, 0.6, 0.1, shirt), limb(1.42, 0.27, 0.6, 0.1, shirt)];
@@ -2759,6 +2778,7 @@ const ANOMALIES = {
   43: 'トンネルの非常口がやたらたくさんある',
   44: 'トンネル手前の看板の「ラジオ」が「オジヤ」になっている',
   49: '白線の太さが半分になっている',
+  50: '運転手の手がゾンビの手になっている',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
   46: 'トンネルの壁がストリートアート（スプレーの落書き）だらけ',
@@ -2777,7 +2797,7 @@ let noInd = false;                     // anomaly 29, while it is showing
    so they count as level 4. */
 const DIFF = [
   [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46],
-  [12, 17, 20, 25, 31, 35, 42, 43, 47],
+  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50],
   [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
