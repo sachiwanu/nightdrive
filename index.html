@@ -3360,6 +3360,7 @@ function endZone(){
 
 /* ---------------------------------------------------------------- rules */
 const crashEl = $('crash'), kmhEl = $('kmh');
+const PAN = { t: 0 };   // how long the view has rested on the house at the end
 function die(cause){ if (P.dead) return;
   /* 09-29: once through the main-line toll plaza on the way home nothing can crash you any more */
   if ((P.homeLeg && P.s > P.hp.tollS + 3) || (P.home === 'main' && !P.onExit && P.x > nearTollM(P.x) + 3)) return; P.dead = true; P.deadT = 0; P.crashes++; crashEl.hidden = false; sndCrash(P.rearHit); }
@@ -3597,7 +3598,7 @@ function step(dt){
       if (P.s > stopAt - 70) P.v = Math.min(P.v, Math.max(0, (stopAt - P.s) * 0.45));
       if (P.s >= stopAt){ P.s = stopAt; P.v = 0; }
       /* ending 4 waits for the officer to reach your window */
-      if (P.v < 0.3 && P.s > stopAt - 20){ P.endT += dt; if (P.endT > (P.endingNo >= 4 ? 6.1 : 1.2) && !P.ended) showEnding(); }
+      if (P.v < 0.3 && P.s > stopAt - 20){ P.endT += dt; if ((P.endingNo >= 4 ? P.endT > 6.1 : PAN.t > 3) && !P.ended) showEnding(); }   /* 09-29: the card waits till the view has turned to the house, then 3 s */
     }
     /* the rail between ramp and main line ends here: hand the car to the main line, so it can
        move right at any point from now on instead of only at the end of the ramp */
@@ -3850,6 +3851,7 @@ function sync(){
   const nowT = performance.now() / 1000, ldt = Math.min(0.1, Math.max(0, nowT - lastLookT)); lastLookT = nowT;
   const wantLook = P.homeLeg && P.v < 0.5 && P.s > P.hp.L - 25 ? 1.25 : 0;
   lookA += (wantLook - lookA) * Math.min(1, ldt * 1.1);
+  PAN.t = wantLook && lookA > 1.2 ? PAN.t + ldt : 0;
   cam.rotation.y = -Math.PI/2 - lookA;
   applyDawn(P.homeLeg ? sm(clamp((P.s / P.hp.L - 0.04) / 0.82, 0, 1)) : 0, P.homeLeg && P.late);
   /* the family waves as you pull up */
