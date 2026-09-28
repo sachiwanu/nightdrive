@@ -129,6 +129,9 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 .stats.home-stats{grid-template-columns:repeat(2,1fr);}
 .home-card{max-height:calc(100dvh - 32px);overflow:auto;}
 .over-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.xshare{display:block;width:100%;height:44px;margin-top:10px;border:1px solid rgba(255,255,255,.35);border-radius:10px;background:#000;color:#fff;
+  font:700 16px/1 "BIZ UDPGothic",system-ui,sans-serif;letter-spacing:.06em;cursor:pointer;}
+.xshare:focus-visible{outline:3px solid #fff;outline-offset:3px;}
 #cont{width:100%;height:52px;border:0;border-radius:10px;background:var(--sodium);color:#2A1706;
   font:900 20px/1 "Zen Kaku Gothic New",system-ui,sans-serif;letter-spacing:.12em;cursor:pointer;}
 #cont:focus-visible{outline:3px solid #fff;outline-offset:3px;}
@@ -200,7 +203,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <h1 id="ttl">8番インターチェンジ</h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
-    <p class="rule small" id="endLine">エンディングは全部で4つ。</p>
+    <p class="rule small" id="endLine">エンディングは全部で5つ。</p>
     <p class="rule small" id="iosTip" hidden>iPhoneは「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
       <thead><tr><th></th><th>アクセル</th><th>ブレーキ</th><th>ハンドル</th></tr></thead>
@@ -220,7 +223,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
       <div class="dbg-row"><select id="dbgSel" aria-label="確認する異変"></select><button id="dbgGo" type="button">この異変で走る</button></div>
       <button id="dbg8a" type="button">8番エリア → エンディング（異変なし＝本線が正解）</button>
       <button id="dbg8b" type="button">8番エリア → エンディング（異変あり＝出口が正解）</button>
-      <div class="dbg-row"><button id="dbgE1" type="button">エンディング1</button><button id="dbgE2" type="button">2</button><button id="dbgE3" type="button">3</button><button id="dbgE4" type="button">4</button></div>
+      <div class="dbg-row"><button id="dbgE1" type="button">エンディング1</button><button id="dbgE2" type="button">2</button><button id="dbgE3" type="button">3</button><button id="dbgE4" type="button">4</button><button id="dbgE5" type="button">5</button></div>
     </div>
   </div>
 </div>
@@ -3235,11 +3238,12 @@ const ENDING4_T = 60 * 60;             // seconds of driving
 const WALK = { sx: 0, sz: 0, tx: 0, tz: 0 };
 const KNOCK = { at: [4.7, 5.0, 5.3], last: 0 };     // ending 4: he knocks on your window three times, then it ends
 function startHomeLeg(){
-  P.endingNo = P.runT >= ENDING4_T ? 4 : P.crashes > 0 ? 3 : P.mistakes > 0 ? 2 : 1;
+  /* 09-28: over the hour it is the police either way - 4 if you never crashed, 5 (with the river) if you did */
+  P.endingNo = P.runT >= ENDING4_T ? (P.crashes > 0 ? 5 : 4) : P.crashes > 0 ? 3 : P.mistakes > 0 ? 2 : 1;
   P.late = P.endingNo !== 1;
   const HP = P.hp, tx = HP.x0, hz = HP.streetZ1 + 14, gy = groundY(hz), mainSide = HP === HOME_M;
-  if (P.crashes > 0 && P.endingNo >= 3) rivers.get(mainSide).visible = true;
-  (mainSide ? police.main : police.home).visible = P.endingNo === 4;
+  if (P.endingNo === 3 || P.endingNo === 5) rivers.get(mainSide).visible = true;
+  (mainSide ? police.main : police.home).visible = P.endingNo >= 4;
   gaya.g.visible = P.endingNo === 1;
   Object.assign(GW, { z: hz - 3, x: tx - 3.7, turnZ: hz - 10, endX: tx - 30, yaw: Math.PI / 2 });
   gaya.g.position.set(GW.x, groundY(GW.z), GW.z); gaya.g.rotation.y = GW.yaw;   /* past the family, facing on down the street, away from you */
@@ -3247,7 +3251,7 @@ function startHomeLeg(){
   officers.forEach((o, i) => {
     const x = tx + spots[i][0], z = hz + spots[i][1];
     o.g.position.set(x, groundY(z) + (Math.abs(spots[i][0]) < 3.1 ? 0.15 : 0), z);
-    o.g.visible = P.endingNo === 4;
+    o.g.visible = P.endingNo >= 4;
   });
   /* at the driver's window, in view as you turn - taken from where the car now stops (09-28: it
      stops 2.5 m further on than it did, and he was left knocking behind you) */
@@ -3290,23 +3294,32 @@ function showEnding(){
   P.ended = true; running = false;
   pauseBtn.hidden = true; touchEl.hidden = true;
   endEl.classList.toggle('late', P.late);
-  $('endNo').textContent = `エンディング ${P.endingNo} / 4`;
-  if (!DBG.mode){ track(`ending-${P.endingNo}`); track(clearBand(P.runT)); }
-  $('endTtl').textContent = ['', 'ただいま。', '……ただいま。', '……ただいま。', '……。'][P.endingNo];
+  $('endNo').textContent = `エンディング ${P.endingNo} / 5`;
+  if (!DBG.mode){ track(`ending-${P.endingNo}`); track("ending-all"); track(clearBand(P.runT)); }   /* ending-all: every ending, whichever (09-28) */
+  $('endTtl').textContent = ['', 'ただいま。', '……ただいま。', '……ただいま。', '……。', '……。'][P.endingNo];
   $('endMiss').textContent = P.mistakes; $('endCrash').textContent = P.crashes;
   const t = Math.round(P.runT), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('endSecs').textContent = P.sections; $('endTime').textContent = mm + ':' + ss;
+  SHARE.text = `8番インターチェンジ　エンディング${P.endingNo}/5「${$('endTtl').textContent}」\n時間 ${$('endTime').textContent}・ミス${P.mistakes}回・事故${P.crashes}回`;
   endEl.hidden = false; $('again').focus();
   for (const k in touch) touch[k] = 0;
 }
 /* a crash ends the run: a short red beat, then the result card */
 const overEl = $('over');
+/* 「𝕏 で結果を共有」 on the game-over and ending cards (09-28): opens X's post box with the result */
+const SHARE = { text: '', url: 'https://sachiwanu.github.io/nightdrive/' };
+for (const b of document.querySelectorAll('.xshare')) b.addEventListener('click', () => {
+  const q = new URLSearchParams({ text: SHARE.text, url: SHARE.url, hashtags: '8番インターチェンジ' });
+  window.open('https://x.com/intent/post?' + q.toString(), '_blank', 'noopener');
+  if (!DBG.mode) track('share');
+});
 function gameOver(){
   P.over = true; running = false;
   crashEl.hidden = true; pauseBtn.hidden = true; touchEl.hidden = true;
   $('overCount').textContent = P.count;
   $('overCrash').textContent = P.crashes;
   $('overSecs').textContent = P.sections;
+  SHARE.text = `8番インターチェンジ　GAME OVER\n${P.count}番出口まで到達・事故${P.crashes}回`;
   overEl.hidden = false; $('cont').focus();
   for (const k in touch) touch[k] = 0;
 }
@@ -3331,11 +3344,12 @@ function resetRun(){
   DM.on = false; daimonji.show(false); for (const c of traffic) if (!c.onc) c.want = 'car';
   hideBiker(); PT.on = false; PT.mode = 0; KT.on = false; for (const c of cargo) c.on = false; MIR.k = 0; HELM.k = 0;
   playerPose(pose); seedTraffic(); rollAnomaly();
-  if (['8a', '8b', 'e1', 'e2', 'e3', 'e4'].includes(DBG.mode)){
+  if (['8a', '8b', 'e1', 'e2', 'e3', 'e4', 'e5'].includes(DBG.mode)){
     P.count = 8;
     if (DBG.mode === 'e2') P.mistakes = 1;
     if (DBG.mode === 'e3') P.crashes = 1;
-    if (DBG.mode === 'e4'){ P.runT = ENDING4_T + 60; P.crashes = 1; }
+    if (DBG.mode === 'e4') P.runT = ENDING4_T + 60;
+    if (DBG.mode === 'e5'){ P.runT = ENDING4_T + 60; P.crashes = 1; }
     anomaly = DBG.mode === '8b' ? ANOM_IDS[Math.floor(Math.random() * ANOM_IDS.length)] : 0;
     applyAnomaly(); dbgHud();
   }
@@ -3407,7 +3421,7 @@ function step(dt){
       if (P.s > stopAt - 70) P.v = Math.min(P.v, Math.max(0, (stopAt - P.s) * 0.45));
       if (P.s >= stopAt){ P.s = stopAt; P.v = 0; }
       /* ending 4 waits for the officer to reach your window */
-      if (P.v < 0.3 && P.s > stopAt - 20){ P.endT += dt; if (P.endT > (P.endingNo === 4 ? 6.1 : 1.2) && !P.ended) showEnding(); }
+      if (P.v < 0.3 && P.s > stopAt - 20){ P.endT += dt; if (P.endT > (P.endingNo >= 4 ? 6.1 : 1.2) && !P.ended) showEnding(); }
     }
     /* the rail between ramp and main line ends here: hand the car to the main line, so it can
        move right at any point from now on instead of only at the end of the ramp */
@@ -4243,7 +4257,7 @@ $('dbgAll').addEventListener('click', () => dbgStart('all'));
 $('dbgHint').addEventListener('click', () => dbgStart('hint'));
 $('dbg8a').addEventListener('click', () => dbgStart('8a'));
 $('dbg8b').addEventListener('click', () => dbgStart('8b'));
-for (const k of [1, 2, 3, 4]) $('dbgE' + k).addEventListener('click', () => dbgStart('e' + k));
+for (const k of [1, 2, 3, 4, 5]) $('dbgE' + k).addEventListener('click', () => dbgStart('e' + k));
 /* choose one anomaly from the list */
 const dbgSel = $('dbgSel');
 ANOM_IDS.forEach((id, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = `${i + 1}. ${ANOMALIES[id]}`; dbgSel.appendChild(o); });
@@ -4263,7 +4277,7 @@ $('dbgNext').addEventListener('click', () => dbgJump(1));
 addEventListener('keydown', e => { if (DBG.mode === 'all' && !e.repeat){ if (e.code === 'KeyN') dbgJump(1); if (e.code === 'KeyB') dbgJump(-1); } });
 {
   /* harder still (09-28): tap the title 3 times quickly, then within 4 s tap the line
-     「エンディングは全部で4つ。」 4 times, then within 5 s press and hold the title for 3 s.
+     「エンディングは全部で5つ。」 4 times, then within 5 s press and hold the title for 3 s.
      Any slip starts it over. Or open the page with #nd8dbg. */
   const ttl = $('ttl'), endLine = $('endLine');
   const D = { stage: 0, n: 0, lastT: 0, stageT: 0, hold: 0 };
