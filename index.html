@@ -814,12 +814,10 @@ function drawExitSign(n){
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (signMode.mirror) g.setTransform(-1, 0, 0, 1, w, 0);
   signPlate(g, w, h);
-  g.fillStyle = '#fff'; rr(g, 36, 58, 150, 150, 14); g.fill();
-  g.fillStyle = '#0d6a3f'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = `700 ${n >= 10 ? 96 : 122}px ${SIGNFONT}`; g.fillText(signMode.inf ? '∞' : String(n), 111, 138);
-  g.fillStyle = '#fff'; g.textAlign = 'left';
-  g.font = `700 104px ${SIGNFONT}`; g.fillText('出口', 214, 116);
-  g.font = `700 34px ${SIGNFONT}`; g.fillText('EXIT', 218, 204);
+  /* no number on it (09-28): just 出口 / EXIT */
+  g.fillStyle = '#fff'; g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.font = `700 120px ${SIGNFONT}`; g.fillText('出口', 60, 120);
+  g.font = `700 34px ${SIGNFONT}`; g.fillText('EXIT', 64, 206);
   arrow(g, 432, 196, 135, 110);
   g.setTransform(1, 0, 0, 1, 0, 0);
   exitTex.needsUpdate = true;
@@ -980,21 +978,22 @@ function buildSection(){
 
   /* overhead sign gantry */
   const GX = GANTRY_X;
-  Wb(GX).box(GX, 3.4, -10.2, 0.45, 8.8, 0.45, COL.gantry);          /* stands on the slope, so it runs 1 m deeper */
-  Wb(GX).box(GX, 3.9, 7.4, 0.45, 7.8, 0.45, COL.gantry);
-  Wb(GX).box(GX, 7.95, -1.4, 0.5, 0.55, 18.1, COL.gantry);
-  Wb(GX).box(GX, 4.62, -1.4, 0.3, 0.22, 18.1, COL.gantry);
-  const panel = (zc, w, b) => { const x = GX - 0.34, y0 = 4.8, y1 = 7.55, z0 = zc - w/2, z1 = zc + w/2;
+  /* panels 1.5 x (09-28): the gantry is 1.4 m taller and a little wider to carry them */
+  Wb(GX).box(GX, 4.1, -10.9, 0.45, 10.2, 0.45, COL.gantry);          /* stands on the slope, so it runs 1 m deeper */
+  Wb(GX).box(GX, 4.6, 8.1, 0.45, 9.2, 0.45, COL.gantry);
+  Wb(GX).box(GX, 9.35, -1.4, 0.5, 0.55, 19.5, COL.gantry);
+  Wb(GX).box(GX, 4.62, -1.4, 0.3, 0.22, 19.5, COL.gantry);
+  const panel = (zc, w, b) => { const x = GX - 0.34, y0 = 4.8, y1 = 8.93, z0 = zc - w/2, z1 = zc + w/2;
     Wb(GX).box(GX - 0.22, (y0 + y1)/2, zc, 0.14, y1 - y0 + 0.1, w + 0.1, COL.panelBack);
     b.quad([x,y0,z0],[x,y0,z1],[x,y1,z1],[x,y1,z0], [1,1,1], 0.35, 1);
     glow(GX - 0.9, 4.72, zc - w*0.25, [1,0.95,0.85], 0.35, 0.5); glow(GX - 0.9, 4.72, zc + w*0.25, [1,0.95,0.85], 0.35, 0.5); };
-  panel(-5.6, 5.2, signExit); panel(1.9, 6.4, signMain);
+  panel(-6.4, 7.8, signExit); panel(2.5, 9.6, signMain);
 
   /* the "N番出口 1km" sign on the left verge: the start of the watch zone */
   {
-    const x = ZSIGN_X, y0 = 2.4, y1 = 6.0, z0 = -12.0, z1 = -6.6;    /* 1.5 x the first size, just after the merge */
+    const x = ZSIGN_X, y0 = 2.4, y1 = 7.8, z0 = -14.7, z1 = -6.6;    /* 2.25 x the first size (1.5 x again 09-28), just after the merge */
     const pb = -0.3, pt = y1 - 0.2;    /* posts from the verge up behind the panel */
-    for (const zp of [-11.0, -7.6]) Wb(x).box(x + 0.1, (pb + pt)/2, zp, 0.14, pt - pb, 0.14, COL.gantry);
+    for (const zp of [-13.2, -8.1]) Wb(x).box(x + 0.1, (pb + pt)/2, zp, 0.14, pt - pb, 0.14, COL.gantry);
     Wb(x).box(x + 0.12, (y0 + y1)/2, (z0 + z1)/2, 0.1, y1 - y0 + 0.1, z1 - z0 + 0.1, COL.panelBack);
     /* lit from below like the real thing: the face is split in bands so the light fades a little
        toward the top, and it cuts through the rain from far off (its own fog factor) */
@@ -1009,7 +1008,7 @@ function buildSection(){
       Wb(x).box(x - 0.72, y0 - 0.3, zl, 0.22, 0.14, 0.34, [0.1, 0.1, 0.11]);
       glow(x - 0.78, y0 - 0.2, zl, [1, 0.97, 0.9], 1.0, 0.7);
     }
-    glow(x - 0.25, y0 + 0.9, (z0 + z1)/2, [0.75, 1.0, 0.85], 0.16, 6.5);   /* the wash of light on the face */
+    glow(x - 0.25, y0 + 1.3, (z0 + z1)/2, [0.75, 1.0, 0.85], 0.16, 9.75);   /* the wash of light on the face */
   }
 
   /* gore nose */
@@ -2629,7 +2628,7 @@ function spawnBiker(){
   const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 1 ? 2 : 1;
   let x = pose.x + (meetX - pose.x) * 0.45;
   for (let t = 0; t < 8 && !laneClear(lane, x, 25, 25, null); t++) x += 10;
-  Object.assign(BK, { on: true, z: LANES[lane], x, v: Math.max(8, 0.55 * P.v), phase: 0, t: 0, mode: anomaly,
+  Object.assign(BK, { on: true, z: LANES[lane], lane, lc: 0, ind: 0, sig: 0, x, v: Math.max(8, 0.55 * P.v), phase: 0, t: 0, mode: anomaly,
                       scale: anomaly === 23 ? 1.2 : 1, twin: anomaly === 25 });
   bikers.forEach((bm, i) => {
     bm.g.visible = i === 0 || BK.twin;
@@ -2903,6 +2902,7 @@ function step(dt){
   if (PT.on){
     let target = Math.max(30, P.v + 16);
     for (const c of traffic) if (!c.onc && Math.abs(c.z - PT.z) < 2 && c.x > PT.x && c.x - PT.x < 26 + c.hl) target = Math.min(target, c.v);
+    if (BK.on && Math.abs(BK.z - PT.z) < 2 && BK.x > PT.x && BK.x - PT.x < 18 + 2.3 * PT.sx) target = Math.min(target, BK.v);   /* never through the biker */
     /* it never runs into you: if you are in its lane ahead, it hangs back about 14 m and goes round
        you in another lane. (Swerve into it yourself and it is still a crash.) */
     const dxp = pose.x - PT.x;
@@ -2947,6 +2947,17 @@ function step(dt){
     /* slower than you whatever you do, so you always catch him */
     let target = Math.max(8, 0.55 * P.v);
     for (const c of traffic) if (!c.onc && Math.abs(c.z - BK.z) < 2 && c.x > BK.x && c.x - BK.x < 16 + c.hl) target = Math.min(target, c.v);
+    /* the patrol car coming up behind him in his lane: indicator on, then he moves over (09-28) */
+    if (PT.on && !BK.lc && Math.abs(BK.z - PT.z) < 2 && BK.x > PT.x && BK.x - PT.x < 110){
+      const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2);
+      const opts = [BK.lane - 1, BK.lane + 1].filter(l => l >= 0 && l <= 2 && l !== PT.lane);
+      opts.sort((a, b) => (a === pl) - (b === pl));
+      for (const tl of opts) if (laneClear(tl, BK.x, 20, 12, null)){ BK.lc = 1; BK.tgt = tl; BK.sig = 0.9; BK.ind = Math.sign(LANES[tl] - LANES[BK.lane]); break; }
+    }
+    if (BK.lc && (BK.sig -= dt) <= 0){
+      BK.z += clamp(LANES[BK.tgt] - BK.z, -1.8 * dt, 1.8 * dt);
+      if (Math.abs(LANES[BK.tgt] - BK.z) < 0.02){ BK.z = LANES[BK.tgt]; BK.lane = BK.tgt; BK.lc = 0; BK.ind = 0; }
+    }
     BK.v += clamp(target - BK.v, -9 * dt, 4 * dt); BK.x += BK.v * dt; BK.wheel += BK.v * dt;
     /* gone once you have passed him and he has dropped out of the mirror, or once the zone is
        over and nobody sees him go */
@@ -3255,6 +3266,8 @@ function sync(){
     if (bm.bike.visible){
       dglow(BK.x + 0.74*s, 0.98*s, bz, 1.0, 0.95, 0.85, 0.7*s); dglow(BK.x + 0.8*s, 0.9*s, bz, 0.35, 0.33, 0.3, 3.0*s);
       dglow(BK.x - 0.82*s, 0.78*s, bz, 0.9, 0.07, 0.05, 0.45*s);
+      if (BK.ind && indOn && !noInd) for (const e of [0.78, -0.86]){
+        dglow(BK.x + e*s, 0.88*s, bz + BK.ind*0.32*s, 1.3, 0.7, 0.06, 0.45*s); dglow(BK.x + e*s, 0.88*s, bz + BK.ind*0.32*s, 0.4, 0.2, 0.02, 1.6*s); }
     }
   });
   if (runner.on){
@@ -3670,6 +3683,6 @@ if (hot && hot.snapshot) hot.snapshot(() => ({ count: P.count }));
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
 window.__nd = { cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, get noInd(){ return noInd; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
 </script>
-
 <script data-goatcounter="https://hachiban-ic.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+
 </body></html>
