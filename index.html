@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><title>8番インターチェンジ</title><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<html lang="ja"><head><meta charset="utf-8"><title>8番インターチェンジ</title><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"></head><body>
 <title>8番インターチェンジ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,6 +56,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 #pause{display:flex;align-items:center;justify-content:center;gap:6px;}
 #pause .bar{display:block;width:4px;height:16px;border-radius:1px;background:var(--ink);}
 #snd{right:calc(64px + env(safe-area-inset-right,0px));font-size:15px;letter-spacing:0;z-index:5;}
+#fs{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(116px + env(safe-area-inset-right,0px));width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-edge);background:var(--glass);color:var(--ink);font:700 15px/1 "BIZ UDPGothic",system-ui,sans-serif;z-index:5;cursor:pointer;}
 #snd.off{opacity:.55;text-decoration:line-through;}
 
 #touch{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;
@@ -155,6 +156,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 <div id="speed"><b id="kmh">80</b><span>km/h</span></div>
 <button id="pause" type="button" aria-label="一時停止" hidden><span class="bar"></span><span class="bar"></span></button>
 <button id="snd" type="button" aria-label="音を消す" aria-pressed="true" hidden>音</button>
+<button id="fs" type="button" aria-label="全画面" hidden>全</button>
 <div id="dbgHud" hidden><button id="dbgPrev" type="button" aria-label="前の異変">◀</button><span id="dbgTxt"></span><button id="dbgNext" type="button" aria-label="次の異変">▶</button></div>
 <div id="rotate" hidden>横向きにすると見やすくなります</div>
 <div id="touch" hidden>
@@ -3959,14 +3961,32 @@ document.addEventListener('visibilitychange', () => {
   if (SND.ctx){ if (document.hidden) SND.ctx.suspend(); else if (running || P.over || P.ended) SND.ctx.resume(); }
   last = performance.now();
 });
+/* full screen on phones (09-28): browsers only allow it from a tap, so it goes with 出発, plus a
+   「全」 button to get back into it. Landscape is locked where the browser allows (Android).
+   iPhone Safari has no full screen for pages: there, "Add to Home Screen" is the way. */
+const fsBtn = $('fs'), fsEl = document.documentElement;
+const fsAPI = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
+const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function goFull(){
+  if (!fsAPI || fsOn()) return;
+  try {
+    const r = fsAPI.call(fsEl, { navigationUI: 'hide' });
+    const lock = () => { try { const q = screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'); if (q && q.catch) q.catch(() => {}); } catch (_) {} };
+    if (r && r.then) r.then(lock, () => {}); else lock();
+  } catch (_) {}
+}
+const paintFs = () => { fsBtn.hidden = !(fsAPI && (isMobile || navigator.maxTouchPoints > 0) && running && !fsOn()); };
+fsBtn.addEventListener('click', () => { goFull(); });
+document.addEventListener('fullscreenchange', paintFs); document.addEventListener('webkitfullscreenchange', paintFs);
 function begin(){
+  if (isMobile || navigator.maxTouchPoints > 0) goFull();
   if (!DBG.mode) track('start');
   sndInit(); if (SND.ctx) SND.ctx.resume();
   sndBtn.hidden = false;
   panel.hidden = true; running = true; pauseBtn.hidden = false; $('toTitle').hidden = true;
   touchEl.hidden = !(isMobile || navigator.maxTouchPoints > 0);
   last = performance.now(); keepAwake();
-  canvas.focus?.();
+  canvas.focus?.(); paintFs();
 }
 startBtn.addEventListener('click', begin);
 
