@@ -204,6 +204,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
+    <p class="rule small">料金所のETCは時速20km以下で。速いとバーが上がらない。</p>
     <p class="rule small" id="endLine">エンディングは全部で5つ。</p>
     <p class="rule small" id="iosTip" hidden>iPhoneは「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
@@ -860,6 +861,26 @@ function drawToll(){
   }
   tollTex.needsUpdate = true;
 }
+
+/* 「ETC 20km/h」 - the sign before every toll gate (09-29) */
+const etcCv = signCanvas(256, 320), etcTex = new THREE.CanvasTexture(etcCv);
+(function drawEtc(){
+  const g = etcCv.getContext('2d');
+  g.fillStyle = '#4a2f8f'; g.fillRect(0, 0, 256, 320);
+  g.strokeStyle = '#fff'; g.lineWidth = 8; rr(g, 12, 12, 232, 296, 16); g.stroke();
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `900 92px ${SIGNFONT}`; g.fillText('ETC', 128, 92);
+  g.font = `900 104px ${SIGNFONT}`; g.fillText('20', 120, 206);
+  g.font = `700 34px ${SIGNFONT}`; g.fillText('km/h', 128, 276);
+  etcTex.needsUpdate = true;
+})();
+/* one on a post: (x, y, z) ground point, th the road's heading there */
+function etcSign(b, pb, x, y, z, th){
+  const fx = Math.cos(th), fz = Math.sin(th), lx = -fz, lz = fx;          /* forward, and the right-hand side */
+  const P3 = (d, h) => [x + lx * d, y + h, z + lz * d];
+  pb.box(x + fx * 0.06, y + 1.4, z + fz * 0.06, 0.1, 2.8, 0.1, [0.5, 0.5, 0.52], 0, 1, th);
+  b.quad(P3(-0.5, 1.9), P3(0.5, 1.9), P3(0.5, 3.15), P3(-0.5, 3.15), [1, 1, 1], 0.8);   /* lit, so it reads in the rain */
+}
 const signMode = { mirror: false, inf: false };   // two of the anomalies live on this sign
 function drawExitSign(n){
   const g = exitCv.getContext('2d'), w = exitCv.width, h = exitCv.height;
@@ -930,6 +951,7 @@ function buildSection(){
   const NCH = 6, CH = SECTION / NCH;
   const ch = Array.from({ length: NCH }, () => new B());
   const Wb = x => ch[clamp(Math.floor(x / CH), 0, NCH - 1)];
+  const g0etc = [];
   const orbCamB = new B(), tollB = new B(), signExit = new B(), signMain = new B(), chev = new B(), signZone = new B(), tunPlate = new B(), tunPanels = new B();
   const GL = [];
   const glow = (x, y, z, c, k, size) => GL.push(x, y, z, c[0]*k, c[1]*k, c[2]*k, size);
@@ -1402,6 +1424,12 @@ function buildSection(){
     tollB.quad(ex(fs, -2.1, 5.52), ex(fs, 2.1, 5.52), ex(fs, 2.1, 6.3), ex(fs, -2.1, 6.3), [1,1,1], 0.45, 1, [0,v0, 1,v0, 1,v1, 0,v1]);
   };
   tollRamp(EX_TOLL, 'exit');
+  { /* the 「ETC 20km/h」 signs: on the ramp before its gate, and on the way home before that one */
+    const eb = new B(), q = exPose(EX_TOLL - 30, 3.0, {});
+    etcSign(eb, Wb(q.x), q.x, q.y, q.z, q.th);
+    if (HOME.tollS > 0){ const h = pathPose(HOME, HOME.tollS - 38, 3.6, {}); etcSign(eb, Wb(h.x), h.x, h.y, h.z, h.th); }
+    g0etc.push(eb);
+  }
 
   /* assemble */
   const g = new THREE.Group();
@@ -1414,6 +1442,7 @@ function buildSection(){
   const dashes = new THREE.Mesh(dashB.geo(), worldMat); dashes.frustumCulled = false; g.add(dashes);
   g.add(new THREE.Mesh(signExit.geo(), mapMat(exitTex)));
   g.add(new THREE.Mesh(tollB.geo(), mapMat(tollTex)));
+  for (const eb of g0etc) g.add(new THREE.Mesh(eb.geo(), mapMat(etcTex)));
   { const m = new THREE.Mesh(orbCamB.geo(), worldMat); m.name = 'orbCams'; g.add(m); }
   g.add(new THREE.Mesh(signMain.geo(), mapMat(mainTex)));
   g.add(new THREE.Mesh(chev.geo(), mapMat(chevTex)));
@@ -1505,11 +1534,17 @@ const GATES = (() => {
     mk(HOME, HOME.tollS + 2, 2.85, 5.6),
   ];
 })();
+const GATE_V = 20 / 3.6;               // the ETC bars only lift at 20 km/h or less (09-29)
 function updateGates(dt){
   for (const G of GATES){
     const onIt = G.HP === EX ? P.onExit && !P.homeLeg : P.homeLeg && P.hp === G.HP;
-    const ds = G.s - P.s, want = onIt && ds < 16 && ds > -9;
+    /* 09-29: like a real ETC lane, it only lifts if you come up to it at 20 km/h or less - too
+       fast and it stays down, and running into it is a crash */
+    const ds = G.s - P.s, near = onIt && ds < 16 && ds > -9;
+    const want = near && (G.open || P.v <= GATE_V);
     if (want && !G.open) sndGate();
+    if (onIt && !P.dead && G.prev > 0 && ds <= 0 && G.a < 0.9) die('衝突した');
+    G.prev = onIt ? ds : 99;
     G.open = want;
     G.a += clamp((want ? 1.45 : 0) - G.a, -1.6 * dt, 2.6 * dt);
     G.arm.rotation.z = G.a;
@@ -1533,7 +1568,8 @@ const mainToll = (() => {
   for (const z of [-3.5, 0, 3.5]) b.box(X - 4.05, 5.2, z + 0.9, 0.2, 0.2, 0.4, [0.2, 1.0, 0.45], 2.2);
   const fs = X - 4.06, v1 = 1 - 832/1024;
   tb.quad([fs, 5.52, -2.1], [fs, 5.52, 2.1], [fs, 6.3, 2.1], [fs, 6.3, -2.1], [1, 1, 1], 0.45, 1, [0, 0, 1, 0, 1, v1, 0, v1]);
-  g.add(new THREE.Mesh(b.geo(), worldMat), new THREE.Mesh(tb.geo(), mapMat(tollTex)));
+  const eb = new B(); etcSign(eb, b, X - 50, 0, 6.3, 0);
+  g.add(new THREE.Mesh(b.geo(), worldMat), new THREE.Mesh(tb.geo(), mapMat(tollTex)), new THREE.Mesh(eb.geo(), mapMat(etcTex)));
   const bars = [-3.5, 0, 3.5].map(lz => {
     const piv = new THREE.Group(), arm = new THREE.Group(), ab = new B();
     piv.position.set(X + 2, 0, lz + 1.5); piv.rotation.y = Math.PI / 2; arm.position.y = 0.92;
@@ -1554,7 +1590,10 @@ function updateMainToll(dt){
   const X = nearTollM(pose.x); mainToll.g.position.x = X - TOLL_M;
   for (const bar of mainToll.bars){
     const near = (x, z) => Math.abs(z - bar.lz) < 1.6 && x - (X + 2) > -16 && x - (X + 2) < 9;
-    const mine = !P.onExit && near(P.x, P.d);
+    const mine = !P.onExit && near(P.x, P.d) && (bar.mine || P.v <= GATE_V);
+    const dsb = X + 2 - P.x, inLane = !P.onExit && Math.abs(P.d - bar.lz) < 1.6;
+    if (inLane && !P.dead && bar.prev > 0 && dsb <= 0 && bar.a < 0.9) die('衝突した');
+    bar.prev = inLane ? dsb : 99;
     let want = mine;
     for (const c of traffic) if (!c.onc && !c.parked && near(c.x, c.z)) want = true;
     if (mine && !bar.mine) sndGate();
@@ -2800,7 +2839,7 @@ const START_X = ZSIGN_X - SECTION - 200; // a few seconds of road before the "1k
 const START_S = EX_TOLL - 45;            // 09-28: you start on the ramp, a little before its toll gate, and join the main line from there
 /* onExit: off the main line (on the loop, or on the road home). home: the road home was
    earned at this fork. homeLeg: actually on the road home now. */
-const P = { onExit: true, x: START_X, s: START_S, d: 0, v: 14, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0,
+const P = { onExit: true, x: START_X, s: START_S, d: 0, v: 5, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0,
             risk: 0, rearHit: false, took: false, count: 0, sections: 0, best: 0, over: false,
             home: false, homeLeg: false, hp: HOME, late: false, ended: false, endT: 0, crashes: 0, mistakes: 0, endingNo: 0 };
 const pose = { x: START_X, y: 0, z: 0, th: 0, pt: 0 };
@@ -2950,6 +2989,8 @@ function updateTraffic(dt){
     if (KT.on && !leaving && Math.abs(KT.z - c.z) < 2.2 && KT.x > c.x){ const g = KT.x - c.x - 5.5 - c.hl; if (g < gap){ gap = g; lv = KT.v; } }
     if (PT.on && Math.abs(PT.z - c.z) < 2.2 && PT.x > c.x){ const g = PT.x - c.x - 2.3 * PT.sx - c.hl; if (g < gap){ gap = g; lv = PT.v; } }
     let want = c.vPref;
+    /* 09-29: at the main-line toll plaza they slow to 20 km/h through the ETC lanes too */
+    if (P.home === 'main' && !c.onc){ const dx = nearTollM(c.x) - c.x; if (dx > -3 && dx < 80) want = Math.min(want, GATE_V + Math.max(0, dx - 22) * 0.35); }
     if (gap < 40) want = Math.min(want, lv + (gap - 12) * 0.25);
     if (gap < 6) want = Math.min(want, lv - 2);
     c.v = Math.max(0, c.v + clamp(want - c.v, -7*dt, 2.2*dt));
@@ -3319,7 +3360,9 @@ function endZone(){
 
 /* ---------------------------------------------------------------- rules */
 const crashEl = $('crash'), kmhEl = $('kmh');
-function die(cause){ if (P.dead) return; P.dead = true; P.deadT = 0; P.crashes++; crashEl.hidden = false; sndCrash(P.rearHit); }
+function die(cause){ if (P.dead) return;
+  /* 09-29: once through the main-line toll plaza on the way home nothing can crash you any more */
+  if ((P.homeLeg && P.s > P.hp.tollS + 3) || (P.home === 'main' && !P.onExit && P.x > nearTollM(P.x) + 3)) return; P.dead = true; P.deadT = 0; P.crashes++; crashEl.hidden = false; sndCrash(P.rearHit); }
 /* Judged the moment you pass the fork. An anomaly: take the exit and turn back. No anomaly:
    carry straight on along the main line. (Swapped 09-27 - it used to be the other way round.)
    At 8番出口 the right answer, either way, opens the road home on that side. */
@@ -3443,6 +3486,15 @@ function gameOver(){
 }
 /* つづきから: back to the start of the same N番 zone. The record - crashes, mistakes, time, zones
    driven - carries on. */
+/* 09-29: a crash sends you back to the start (エリア0) at once. The crashes, the mistakes, the
+   time on the road and the sections driven are kept - they count toward the ending. */
+function restartAfterCrash(){
+  const keep = { best: P.best, sections: P.sections, runT: P.runT, crashes: P.crashes, mistakes: P.mistakes };
+  resetRun();
+  Object.assign(P, keep);
+  rollAnomaly();
+  showToast(`事故 ${P.crashes}回目　エリア0からやり直し`, 2600);
+}
 function continueRun(){
   const keep = { count: P.count, best: P.best, sections: P.sections, runT: P.runT, crashes: P.crashes, mistakes: P.mistakes };
   resetRun();
@@ -3450,7 +3502,7 @@ function continueRun(){
   rollAnomaly();
 }
 function resetRun(){
-  Object.assign(P, { onExit: true, x: START_X, s: START_S, d: 0, v: 14, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0, risk: 0, rearHit: false,
+  Object.assign(P, { onExit: true, x: START_X, s: START_S, d: 0, v: 5, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0, risk: 0, rearHit: false,
                      took: false, count: 0, sections: 0, over: false, home: false, homeLeg: false, hp: HOME, late: false, ended: false, endT: 0,
                      crashes: 0, mistakes: 0, endingNo: 0 });
   for (const m of [rivers.home, rivers.main, police.home, police.main, gaya.g, ...officers.map(o => o.g)]) if (m) m.visible = false;
@@ -3480,7 +3532,7 @@ function step(dt){
   lastThr = P.dead ? 0 : inp.thr;
   if (P.dead){
     P.v = Math.max(0, P.v - 10*dt); P.deadT += dt;
-    if (P.deadT > 1.6 && !P.over) gameOver();
+    if (P.deadT > 1.6 && !P.over) restartAfterCrash();   /* 09-29: no menu - straight back to the start, the record kept */
   } else {
     const ah = P.homeLeg ? (P.hp === HOME_M || P.s > P.hp.tollS + 10) : (P.home === 'main' && !P.onExit && P.x > TOLL_M + 10);
     if (inp.thr > 0 && !ah) P.v += 5.6 * inp.thr * (1 - P.v / VMAX) * dt;
@@ -3679,7 +3731,10 @@ function step(dt){
     /* same model as the UE build: crawl below 65 km/h and the car behind closes in, and the
        chance of it hitting you climbs with how close it is */
     const def = clamp((SAFE - P.v) / SAFE, 0, 1);
-    P.risk = clamp(P.risk + ((def > 0 && P.runT > 6) ? def * 0.16 : -0.6) * dt, 0, 1);
+    /* 09-29: no one rides up behind you on the ramp or at the main-line toll plaza - you have to
+       be slow there for the ETC bar */
+    const slowOK = P.onExit || !!P.home;   /* ...nor once the way home is open (09-29: the car behind used to close in on you after the toll) */
+    P.risk = clamp(P.risk + ((def > 0 && P.runT > 6 && !slowOK) ? def * 0.16 : -0.6) * dt, 0, 1);
     if (!P.home && P.risk > 0.45 && Math.random() < P.risk * 0.55 * dt){ P.rearHit = true; die('追突された'); }
   }
   followerOn = P.risk > 0.004 || P.rearHit;
@@ -3840,7 +3895,7 @@ function sync(){
   if (family.wife.g.visible){ face(family.wife); face(family.kid); }   /* waving at you, the driver (09-28) */
   if (gaya.g.visible){
     /* down the street, then left into the side street and away between the walls, gone */
-    const walking = P.s > P.hp.L - 150 && GW.x > GW.endX, st = 1.1 * ldt;
+    const walking = P.s > P.hp.L - 58 && GW.x > GW.endX, st = 0.9 * ldt;   /* 09-29: timed so he is turning the corner as the car stops, still in view */
     if (walking){
       if (GW.z > GW.turnZ) GW.z = Math.max(GW.turnZ, GW.z - st);
       else GW.x -= st;
@@ -3984,8 +4039,10 @@ function sync(){
     if (bm.bike.visible){
       dglow(BK.x + 0.74*s, 0.98*s, bz, 1.0, 0.95, 0.85, 0.7*s); dglow(BK.x + 0.8*s, 0.9*s, bz, 0.35, 0.33, 0.3, 3.0*s);
       dglow(BK.x - 0.82*s, 0.78*s, bz, 0.9, 0.07, 0.05, 0.45*s);
-      if (BK.ind && indOn && !noInd) for (const e of [0.78, -0.86]){
-        dglow(BK.x + e*s, 0.88*s, bz + BK.ind*0.32*s, 1.3, 0.7, 0.06, 0.45*s); dglow(BK.x + e*s, 0.88*s, bz + BK.ind*0.32*s, 0.4, 0.2, 0.02, 1.6*s); }
+      /* indicator when he moves over; both sides blinking in the hazard-lights anomaly (09-29) */
+      const haz = anomaly === 47, sides = haz ? [-1, 1] : BK.ind && !noInd ? [BK.ind] : [];
+      if (sides.length && (haz ? (clock * 1.4 + 0.6) % 1 < 0.5 : indOn)) for (const sd of sides) for (const e of [0.78, -0.86]){
+        dglow(BK.x + e*s, 0.88*s, bz + sd*0.32*s, 1.3, 0.7, 0.06, 0.45*s); dglow(BK.x + e*s, 0.88*s, bz + sd*0.32*s, 0.4, 0.2, 0.02, 1.6*s); }
     }
   });
   if (runner.on){
