@@ -410,14 +410,16 @@ const exPose = (s, d, o) => pathPose(EX, s, d, o);
 /* The roads home - open only at 8番出口, on the side that was the right answer. Both swing
    away from the highway, follow the hillside down and end on a short residential street in
    front of the house (about 350 m each). */
+const HOME_DESC = 320;                 // the hill down to the town (170 -> 320 m, 09-28)
 function homeTail(raw, xs, zs, r){
   const cx = xs, cz = zs - r;
   for (let i = 1; i <= 160; i++){ const a = Math.PI/2 * i/160; raw.push([cx + r*Math.sin(a), cz + r*Math.cos(a), 0]); }
   const x0 = cx + r, z0 = cz;
-  for (let i = 1; i <= 680; i++){ const t = i/680; raw.push([x0 + 8*(1 - Math.cos(2*Math.PI*t))/2, z0 - 170*t, 0]); }
-  for (let i = 1; i <= 360; i++){ const t = i/360; raw.push([x0, z0 - 170 - 90*t, 0]); }
+  for (let i = 1; i <= 1280; i++){ const t = i/1280; raw.push([x0 + 8*(1 - Math.cos(2*Math.PI*t))/2, z0 - HOME_DESC*t, 0]); }
+  for (let i = 1; i <= 360; i++){ const t = i/360; raw.push([x0, z0 - HOME_DESC - 90*t, 0]); }
   const R = resample(raw, (s, x, z) => lerp(0, groundY(z) + 0.15, sm(s / 90)));
-  R.x0 = x0; R.streetZ0 = z0 - 170; R.streetZ1 = z0 - 260;
+  R.x0 = x0; R.streetZ0 = z0 - HOME_DESC; R.streetZ1 = z0 - HOME_DESC - 90;
+  R.tollS = 0; for (let s = 0; s < R.N; s++) if (R.Z[s] < z0 - 40){ R.tollS = s; break; }   /* near the top, with the long run down to the house after it */
   return R;
 }
 /* from the start of the exit loop: straight on under the flyover */
@@ -434,6 +436,8 @@ const HOME_M = (() => {
 })();
 const homePose = (s, d, o) => pathPose(HOME, s, d, o);
 const BARRICADE_S = 24;                // where the closed road is fenced off
+const EX_TOLL_OUT = 105, EX_TOLL_IN = 330;   // the ramp's two toll gates (09-28)
+const nearToll = (s, r) => Math.abs(s - EX_TOLL_OUT) < r || Math.abs(s - EX_TOLL_IN) < r;
 /* where the returning ramp comes alongside the main line: from here they share a lane edge,
    so the ramp loses its inner rail and the main line its left one - and the player is handed
    to the main line and may move right at any point */
@@ -808,6 +812,45 @@ function signPlate(g, w, h){
   g.fillStyle = '#0d6a3f'; g.fillRect(0, 0, w, h);
   g.strokeStyle = '#fff'; g.lineWidth = 7; rr(g, 12, 12, w - 24, h - 24, 16); g.stroke();
 }
+
+/* the toll gate on the road home (09-28, from the user's photo): one atlas for its sign faces.
+   rows: green name sign / orange LED board / ETC専用 + 一般 lane plates */
+const tollCv = signCanvas(1024, 1024), tollTex = new THREE.CanvasTexture(tollCv);
+function drawToll(){
+  const g = tollCv.getContext('2d');
+  g.clearRect(0, 0, 1024, 1024);
+  signPlate(g, 1024, 256);
+  g.fillStyle = '#fff'; rr(g, 34, 36, 300, 184, 12); g.fill();
+  g.fillStyle = '#0d6a3f'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `700 64px ${SIGNFONT}`; g.fillText('夜見新道', 184, 104);
+  g.font = `700 30px ${SIGNFONT}`; g.fillText('YOMI SHINDO', 184, 176);
+  g.fillStyle = '#fff'; g.textAlign = 'left';
+  g.font = `700 104px ${SIGNFONT}`; g.fillText('八番', 372, 100);
+  g.font = `700 58px ${SIGNFONT}`; g.fillText('料金所', 600, 112);
+  g.font = `700 48px ${SIGNFONT}`; g.fillText('Hachiban TOLL GATE', 372, 196);
+  /* LED board */
+  g.fillStyle = '#16181b'; g.fillRect(0, 256, 1024, 256);
+  g.fillStyle = '#050606'; g.fillRect(16, 272, 992, 224);
+  g.fillStyle = '#ff7a22'; g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.font = `700 70px ${SIGNFONT}`; g.fillText('おかえりなさい', 60, 330);
+  g.font = `700 60px ${SIGNFONT}`; g.fillText('この先　自宅まで　順調', 60, 440);
+  /* lane plates */
+  const plate = (x, bg, word) => {
+    g.fillStyle = '#3b3f46'; g.fillRect(x, 512, 512, 128);
+    g.fillStyle = bg; rr(g, x + 40, 526, 432, 100, 10); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 5; rr(g, x + 48, 534, 416, 84, 8); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = `700 64px ${SIGNFONT}`; g.fillText(word, x + 256, 578);
+  };
+  plate(0, '#35307a', 'ETC専用'); plate(512, '#0d6a3f', '一　般');
+  /* the ramp gates' name boards */
+  for (const [y0, big, small] of [[640, '出口料金所', 'EXIT TOLL GATE'], [832, '入口料金所', 'ENTRANCE TOLL GATE']]){
+    g.save(); g.translate(0, y0); signPlate(g, 1024, 192); g.restore();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `700 92px ${SIGNFONT}`; g.fillText(big, 512, y0 + 76);
+    g.font = `700 36px ${SIGNFONT}`; g.fillText(small, 512, y0 + 148);
+  }
+  tollTex.needsUpdate = true;
+}
 const signMode = { mirror: false, inf: false };   // two of the anomalies live on this sign
 function drawExitSign(n){
   const g = exitCv.getContext('2d'), w = exitCv.width, h = exitCv.height;
@@ -839,7 +882,7 @@ function drawChevron(){
   for (let k = -2; k < 4; k++){ g.beginPath(); const y = k*44; g.moveTo(0, y); g.lineTo(64, y+34); g.lineTo(128, y); g.lineTo(128, y+18); g.lineTo(64, y+52); g.lineTo(0, y+18); g.closePath(); g.fill(); }
   chevTex.needsUpdate = true;
 }
-drawExitSign(0); drawMainSign(); drawChevron();
+drawExitSign(0); drawMainSign(); drawChevron(); drawToll();
 
 /* ---------------------------------------------------------------- one section of highway */
 const COL = {
@@ -878,7 +921,7 @@ function buildSection(){
   const NCH = 6, CH = SECTION / NCH;
   const ch = Array.from({ length: NCH }, () => new B());
   const Wb = x => ch[clamp(Math.floor(x / CH), 0, NCH - 1)];
-  const signExit = new B(), signMain = new B(), chev = new B(), signZone = new B(), tunPlate = new B(), tunPanels = new B();
+  const orbCamB = new B(), tollB = new B(), signExit = new B(), signMain = new B(), chev = new B(), signZone = new B(), tunPlate = new B(), tunPanels = new B();
   const GL = [];
   const glow = (x, y, z, c, k, size) => GL.push(x, y, z, c[0]*k, c[1]*k, c[2]*k, size);
   const light = (x, z, c, I, R0) => LIGHTS.push([x, z, c[0], c[1], c[2], I, R0]);
@@ -1044,15 +1087,15 @@ function buildSection(){
       b.bar(at(s, side*2.5, 0), at(s1, side*2.5, 0), 0.58, 0.86, 0.07, COL.rail);
       if (Math.round(s) % 4 === 0){ const p = at(s, side*2.5, 0); b.box(p[0], p[1] + 0.43, p[2], 0.1, 0.86, 0.1, COL.post, 0, 1, c0.th); }
     };
-    if (s >= 12) rail(-1);
-    if (s >= 30 && s < S_MERGE){ const rp = at(s, 2.5, 0); if (!onHomeRoad(rp[0], rp[2], rp[1])) rail(1); }
+    if (s >= 12 && !nearToll(s + 1, 10)) rail(-1);
+    if (s >= 30 && s < S_MERGE && !nearToll(s + 1, 10)){ const rp = at(s, 2.5, 0); if (!onHomeRoad(rp[0], rp[2], rp[1])) rail(1); }
     if (Math.round(s) % 16 === 0 && c0.z < -6.8 && !lowerRoadNear(c0.x, c0.z, c0.y)){
       const top = c0.y - 0.9; if (top - gz > 1.2) b.box(c0.x, (top + gz)/2, c0.z, 1.3, top - gz, 1.3, COL.pillar, 0, 0.35, c0.th); }
   }
   for (let s = 16; s < EX.L - 10; s += 38){
     const inLoop = s > EX.loopS0 && s < EX.loopS1, side = inLoop ? 1 : -1;
     const base = exPose(s, side*3.1, {}), head = exPose(s, side*0.9, {}), b = Wb(base.x);
-    if (upperDeckNear(base.x, base.z, base.y) || upperDeckNear(head.x, head.z, head.y) || onHomeRoad(base.x, base.z, base.y)) continue;
+    if (nearToll(s, 14) || upperDeckNear(base.x, base.z, base.y) || upperDeckNear(head.x, head.z, head.y) || onHomeRoad(base.x, base.z, base.y)) continue;
     lamp(false, base.x, base.z, base.y, () => {
       poleB.box(base.x, base.y + 4.85, base.z, 0.22, 9.7, 0.22, COL.pole);
       poleB.bar([base.x, base.y, base.z], [head.x, head.y, head.z], 9.95, 10.1, 0.14, COL.pole);
@@ -1158,10 +1201,10 @@ function buildSection(){
       rod([OX + dx, yt + 1.05, zp], [OX + dx, yt + 1.05, zE], 0.05); rod([OX + dx, yt + 0.55, zp], [OX + dx, yt + 0.55, zE], 0.04);
       for (let z = zp; z <= zE + 0.01; z += 1.4) rod([OX + dx, yt + 0.1, z], [OX + dx, yt + 1.05, z], 0.05);
     }
-    for (const zc of LANES){
-      Wb(OX).box(OX - 0.2, yt + 0.6, zc, 0.7, 0.5, 0.45, [0.72, 0.73, 0.74]);
-      Wb(OX).box(OX - 0.56, yt + 0.6, zc, 0.04, 0.24, 0.24, [0.03, 0.03, 0.035]);
-      Wb(OX).box(OX - 0.2, yt + 0.22, zc, 0.12, 0.3, 0.12, GR);
+    for (const zc of LANES){          /* the cameras are their own mesh, so anomaly 42 can take them away */
+      orbCamB.box(OX - 0.2, yt + 0.6, zc, 0.7, 0.5, 0.45, [0.72, 0.73, 0.74]);
+      orbCamB.box(OX - 0.56, yt + 0.6, zc, 0.04, 0.24, 0.24, [0.03, 0.03, 0.035]);
+      orbCamB.box(OX - 0.2, yt + 0.22, zc, 0.12, 0.3, 0.12, GR);
     }
   }
   const hx = (TUN_A + TUN_B)/2, hl = TUN_B - TUN_A - 0.8;
@@ -1197,17 +1240,64 @@ function buildSection(){
         b.quad(hat(s,-3.05,dy), hat(s1,-3.05,dy), hat(s1,-3.05,0.045), hat(s,-3.05,0.045), COL.deck, 0, 0.6);
         b.quad(hat(s,3.05,dy), hat(s1,3.05,dy), hat(s1,3.05,0.045), hat(s,3.05,0.045), COL.deck, 0, 0.6);
       }
-      if (s >= railS && s < railS + 126) for (const side of [-1, 1]){
+      if (s >= railS && s < railS + 126 && Math.abs(s - HP.tollS + 5) > 42) for (const side of [-1, 1]){   /* no rails across the toll plaza */
         b.bar(hat(s, side*3.3, 0), hat(s1, side*3.3, 0), 0.58, 0.86, 0.07, COL.rail);
         if (Math.round(s) % 4 === 0){ const pp = hat(s, side*3.3, 0); b.box(pp[0], pp[1] + 0.43, pp[2], 0.1, 0.86, 0.1, COL.post, 0, 1, c0.th); }
       }
     }
     for (let s = lineS + 22; s < HP.L - 8; s += 40){
+      if (Math.abs(s - HP.tollS) < 48) continue;
       const base = pathPose(HP, s, 4.3, {}), head = pathPose(HP, s, 2.0, {});
       if (upperDeckNear(base.x, base.z, base.y) || upperDeckNear(head.x, head.z, head.y)) continue;
       homeLamp(base, head, [1.0, 0.88, 0.7]);
     }
 
+    /* the toll gate (09-28): the road opens out into a plaza of five booths under a canopy; you
+       go through the middle one. Name sign and LED board on top, like the photo. */
+    if (HP.tollS > 0){
+      const TS = HP.tollS, S0 = TS - 45, S1 = TS + 35;
+      const W = s => 3 + 11.8 * sm((s - S0) / 30) * sm((S1 - s) / 25);
+      for (let s = S0; s < S1; s += ST){
+        const s1 = s + ST, w0 = W(s), w1 = W(s1), b = Wb(pathPose(HP, s, 0, {}).x);
+        if (w0 < 3.05 && w1 < 3.05) continue;
+        b.quad(hat(s,-w0,0.04), hat(s1,-w1,0.04), hat(s1,-2.9,0.04), hat(s,-2.9,0.04), COL.asphalt);
+        b.quad(hat(s,2.9,0.04), hat(s1,2.9,0.04), hat(s1,w1,0.04), hat(s,w0,0.04), COL.asphalt);
+      }
+      const at = (s, d) => pathPose(HP, s, d, {});
+      const c0 = at(TS, 0), b = Wb(c0.x), th = c0.th;
+      const box = (s, d, y, sx, sy, sz, col, e = 0) => { const p = at(s, d); b.box(p.x, p.y + y, p.z, sx, sy, sz, col, e, 1, th); };
+      const ISL = [-12.6, -8.0, -3.4, 3.4, 8.0, 12.6];
+      for (const d of ISL){
+        box(TS, d, 0.13, 16, 0.26, 1.1, [0.62, 0.62, 0.6]);                         /* island */
+        box(TS + 0.5, d, 1.45, 3.2, 2.4, 0.9, [0.82, 0.83, 0.8]);                    /* booth */
+        box(TS + 0.5, d, 1.75, 2.4, 0.8, 0.94, [0.75, 0.85, 0.95], 0.9);             /* its lit window */
+        box(TS - 7.6, d, 0.55, 0.5, 1.1, 1.0, [0.95, 0.72, 0.08], 0.15);             /* yellow nose */
+        box(TS - 7.6, d, 0.55, 0.52, 0.22, 1.02, [0.05, 0.05, 0.05]);
+        box(TS - 5.5, d, 1.4, 0.2, 2.2, 0.35, [0.95, 0.45, 0.08], 0.6);              /* orange board */
+        for (const ds of [-2.5, 3.5]) box(TS + ds, d, 3.2, 0.45, 6.4, 0.45, [0.42, 0.42, 0.44]);   /* canopy posts */
+      }
+      box(TS + 0.5, 0, 6.8, 9.6, 0.9, 29, [0.36, 0.36, 0.38]);                      /* canopy */
+      box(TS + 0.5, 0, 6.3, 9.0, 0.08, 28.2, [0.9, 0.93, 1.0], 0.5);                  /* its lit underside */
+      for (const d of [-10.3, -5.7, 0, 5.7, 10.3]){
+        box(TS - 4.3, d, 5.85, 0.2, 0.2, 0.4, [0.2, 1.0, 0.45], 2.2);                 /* green "open" lamp */
+        const p = at(TS, d); light(p.x, p.z, [0.92, 0.95, 1.0], 1.2, 7);
+      }
+      /* lane plates on the canopy front */
+      const fs = TS + 0.5 - 4.85;
+      [[-10.3, 0], [-5.7, 1], [0, 0], [5.7, 1], [10.3, 0]].forEach(([d, k]) => {
+        const y0 = 6.4, y1 = 7.15, dl = d - 1.5, dr = d + 1.5, v0 = 1 - 640/1024, v1 = 1 - 512/1024, u0 = k * 0.5, u1 = u0 + 0.5;
+        tollB.quad(hat(fs, dl, y0), hat(fs, dr, y0), hat(fs, dr, y1), hat(fs, dl, y1), [1,1,1], 0.5, 1, [u0,v0, u1,v0, u1,v1, u0,v1]);
+      });
+      /* name sign and LED board on posts above the canopy */
+      const ss = TS - 1.5;
+      for (const d of [-9, -5, 1, 7]) box(ss + 0.3, d, 8.4, 0.3, 3.0, 0.3, [0.4, 0.4, 0.42]);
+      box(ss + 0.15, -5.75, 8.55, 0.12, 2.5, 8.7, COL.panelBack);
+      box(ss + 0.15, 4.5, 8.55, 0.12, 2.5, 10.7, [0.1, 0.1, 0.11]);
+      const Y0 = 7.4, Y1 = 9.7;
+      tollB.quad(hat(ss, -10, Y0), hat(ss, -1.5, Y0), hat(ss, -1.5, Y1), hat(ss, -10, Y1), [1,1,1], 0.4, 1, [0,0.75, 1,0.75, 1,1, 0,1]);
+      tollB.quad(hat(ss, -0.7, Y0), hat(ss, 9.7, Y0), hat(ss, 9.7, Y1), hat(ss, -0.7, Y1), [1,1,1], 1.1, 1, [0,0.5, 1,0.5, 1,0.75, 0,0.75]);
+      glow(at(ss - 1, -5.75).x, c0.y + 7.0, at(ss - 1, -5.75).z, [0.75, 1.0, 0.85], 0.14, 6);
+    }
     /* the town at the bottom of the road, and the house */
     const tx = HP.x0, zA = HP.streetZ0, zB = HP.streetZ1, HOUSE_Z = zB + 14;
     const house = (side, zc, dz, h, isHome) => {
@@ -1270,6 +1360,33 @@ function buildSection(){
   homeRoad(HOME, 0, 14, BARRICADE_S);
   homeRoad(HOME_M, 12, 36, 40);
 
+  /* the ramp toll gates (09-28): out through one just past the closed road home, back in through
+     another before the ramp joins the main line. One lane between two islands, the booth on the
+     driver's side, a canopy with its name board. */
+  const tollRamp = (TS, kind) => {
+    const at = (s, d) => exPose(s, d, {}), c0 = at(TS, 0), b = Wb(c0.x), th = c0.th;
+    const box = (s, d, y, sx, sy, sz, col, e = 0) => { const p = at(s, d); b.box(p.x, p.y + y, p.z, sx, sy, sz, col, e, 1, at(s, 0).th); };
+    const ex = (s, d, dy) => { const p = at(s, d); return [p.x, p.y + dy, p.z]; };
+    for (let s = TS - 9; s < TS + 9; s++) for (const [d0, d1] of [[-3.7, -2.3], [2.3, 3.7]]){
+      b.quad(ex(s, d0, 0.03), ex(s + 1, d0, 0.03), ex(s + 1, d1, 0.03), ex(s, d1, 0.03), COL.asphalt);
+      const sd = d0 < 0 ? d0 : d1, p = at(s, sd), dy = groundY(p.z) - p.y;
+      if (dy < -0.3) b.quad(ex(s, sd, dy), ex(s + 1, sd, dy), ex(s + 1, sd, 0.03), ex(s, sd, 0.03), COL.deck, 0, 0.6);
+    }
+    for (const d of [-2.95, 2.95]){
+      box(TS, d, 0.13, 12, 0.26, 0.7, [0.62, 0.62, 0.6]);
+      box(TS - 6.2, d, 0.55, 0.4, 1.1, 0.66, [0.95, 0.72, 0.08], 0.15); box(TS - 6.2, d, 0.55, 0.42, 0.22, 0.68, [0.05, 0.05, 0.05]);
+      box(TS - 4.5, d, 1.3, 0.15, 2.0, 0.3, [0.95, 0.45, 0.08], 0.6);
+      for (const ds of [-3, 3]) box(TS + ds, d, 2.8, 0.32, 5.6, 0.32, [0.42, 0.42, 0.44]);
+    }
+    box(TS + 0.5, 2.95, 1.45, 3.0, 2.4, 0.62, [0.82, 0.83, 0.8]); box(TS + 0.5, 2.95, 1.75, 2.3, 0.8, 0.66, [0.75, 0.85, 0.95], 0.9);
+    box(TS, 0, 5.9, 8, 0.7, 8.4, [0.36, 0.36, 0.38]); box(TS, 0, 5.52, 7.4, 0.06, 7.8, [0.9, 0.93, 1.0], 0.5);
+    box(TS - 4.05, 0.9, 5.2, 0.2, 0.2, 0.4, [0.2, 1.0, 0.45], 2.2);
+    light(c0.x, c0.z, [0.92, 0.95, 1.0], 1.2, 7);
+    const fs = TS - 4.06, v0 = kind === 'exit' ? 1 - 832/1024 : 0, v1 = kind === 'exit' ? 1 - 640/1024 : 1 - 832/1024;
+    tollB.quad(ex(fs, -2.1, 5.52), ex(fs, 2.1, 5.52), ex(fs, 2.1, 6.3), ex(fs, -2.1, 6.3), [1,1,1], 0.45, 1, [0,v0, 1,v0, 1,v1, 0,v1]);
+  };
+  tollRamp(EX_TOLL_OUT, 'exit'); tollRamp(EX_TOLL_IN, 'entry');
+
   /* assemble */
   const g = new THREE.Group();
   for (const b of ch) if (!b.empty()) g.add(new THREE.Mesh(b.geo(), worldMat));
@@ -1280,6 +1397,8 @@ function buildSection(){
   const median = new THREE.Mesh(medB.geo(), worldMat); median.frustumCulled = false; g.add(median);
   const dashes = new THREE.Mesh(dashB.geo(), worldMat); dashes.frustumCulled = false; g.add(dashes);
   g.add(new THREE.Mesh(signExit.geo(), mapMat(exitTex)));
+  g.add(new THREE.Mesh(tollB.geo(), mapMat(tollTex)));
+  { const m = new THREE.Mesh(orbCamB.geo(), worldMat); m.name = 'orbCams'; g.add(m); }
   g.add(new THREE.Mesh(signMain.geo(), mapMat(mainTex)));
   g.add(new THREE.Mesh(chev.geo(), mapMat(chevTex)));
   g.add(new THREE.Mesh(tunPlate.geo(), new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: tunTex } }),
@@ -1317,6 +1436,39 @@ const homeLights = (() => {
 LIVE = LIGHTS.map(l => l.slice());
 WU.uLM.value = bakeLightmap();
 for (const k of [-1, 0, 1]){ const g = k === 0 ? SEC.g : SEC.g.clone(); g.position.x = k * SECTION; scene.add(g); }
+
+/* anomaly 42 (09-28): the speed cameras are gone - in their place, one person per lane sits on the
+   catwalk with their legs through the railing, holding up a phone at you. Built facing +x, turned
+   round; moved onto the nearest copy of the gantry. */
+const orbSitters = (() => {
+  const g = new THREE.Group(), b = new B();
+  const skin = [0.5, 0.43, 0.38], hair = [0.04, 0.035, 0.03], phone = [0.03, 0.03, 0.035];
+  const shirts = [[0.55, 0.12, 0.1], [0.12, 0.2, 0.4], [0.7, 0.7, 0.68]], trs = [[0.12, 0.13, 0.18], [0.22, 0.2, 0.16], [0.1, 0.1, 0.11]];
+  LANES.forEach((zc, i) => {
+    const z = -zc, sh = shirts[i], tr = trs[i], y = 7.3;       /* -zc: the group is turned round */
+    b.box(0.08, y + 0.1, z, 0.36, 0.2, 0.38, tr);                                       /* hips */
+    b.box(0.05, y + 0.46, z, 0.24, 0.54, 0.4, sh);                                      /* body */
+    b.box(0.08, y + 0.86, z, 0.19, 0.24, 0.18, skin, 0.05); addFace(b, 0.176, y + 0.86, z, 1);
+    b.box(0.05, y + 0.98, z, 0.21, 0.08, 0.2, hair);
+    for (const s of [-0.1, 0.1]){
+      b.box(0.42, y + 0.08, z + s, 0.5, 0.14, 0.14, tr);                               /* thighs out over the edge */
+      b.box(0.7, y - 0.2, z + s, 0.13, 0.52, 0.13, tr);                                /* shins hanging down */
+      b.box(0.75, y - 0.48, z + s, 0.22, 0.07, 0.12, [0.15, 0.15, 0.16]);
+    }
+    for (const s of [-1, 1]){
+      b.box(0.2, y + 0.56, z + s * 0.2, 0.34, 0.09, 0.09, sh);                          /* upper arms forward */
+      b.box(0.4, y + 0.66, z + s * 0.11, 0.24, 0.08, 0.08, skin);                       /* forearms in to the phone */
+    }
+    b.box(0.53, y + 0.74, z, 0.02, 0.3, 0.16, phone);                                   /* the phone, held up */
+    b.box(0.517, y + 0.74, z, 0.006, 0.26, 0.14, [0.6, 0.72, 0.95], 1.3);               /* its screen, toward them */
+    b.box(0.542, y + 0.85, z + 0.05, 0.01, 0.035, 0.035, [0.9, 0.9, 0.9], 0.4);         /* lens + flash, toward you */
+  });
+  const m = new THREE.Mesh(b.geo(), worldMat); m.rotation.y = Math.PI; m.position.x = ORBIS_X;
+  g.add(m); g.visible = false; scene.add(g);
+  return g;
+})();
+const orbCams = [];
+scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); });
 /* pristine copies, so each new section can start from a clean slate */
 const ORIG = {
   poleP: SEC.poles.attributes.position.array.slice(),
@@ -1438,7 +1590,7 @@ const daimonji = (() => {
 /* ---------------------------------------------------------------- the player's car */
 const car = new THREE.Group(); car.rotation.order = 'YZX'; scene.add(car);
 const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 6000);
-cam.rotation.order = 'YXZ'; cam.position.set(-0.18, 1.27, 0.35); cam.rotation.set(-3*D2R, -Math.PI/2, 0);
+cam.rotation.order = 'YXZ'; cam.position.set(-0.18, 1.27, 0.35); cam.rotation.set(-10*D2R, -Math.PI/2, 0);   /* looking down a little more, so the dash and wheel show (09-28) */
 cam.layers.enable(1); car.add(cam);
 const RT_W = isMobile ? 256 : 512, RT_H = RT_W / 3.2;
 const mirrorRT = new THREE.WebGLRenderTarget(RT_W, RT_H, { depthBuffer: true });
@@ -1460,8 +1612,8 @@ const mirrorPivot = new THREE.Group(); mirrorPivot.position.set(0.385, 1.38, 0.1
   const CL = -35, RD = 40, LD = -110, WD = 150, MIRR_Y = CL + 12;
   U('DASH',76,CL,-34,40,WD,8,[0,5,0]); U('DASH',58,CL,-50,10,WD,26); U('DASH',62,CL,-66,26,WD,12);
   U('AMB',90,CL,-30,1.8,WD,1.5,[0,70,0]); U('DASH',96,CL,-30,18,WD,6,[0,22,0]);
-  U('DASH',66,0,-24,30,52,6,[0,20,0]); U('DASH',62,0,-40,24,52,26); U('GLOW',49.2,0,-33,1.4,44,17); U('CHROME',48.5,0,-33,1.0,47,20);
-  U('DASH',66,CL-2,-52,8,44,30,[0,0,10]); U('GLOW',62.2,CL-2,-50,1.2,36,20,[0,0,10]); U('DASH',66,CL-2,-70,10,44,8,[0,0,10]);
+  U('DASH',66,0,-24,30,52,6,[0,20,0]); U('DASH',62,0,-40,24,52,26);   /* (the dial face is a texture now, cockpit detail below) */
+  U('DASH',66,CL-2,-52,8,44,30,[0,0,10]); U('DASH',66,CL-2,-70,10,44,8,[0,0,10]);
   U('DASH',56,0,-58,14,11,20);
   U('TRIM',52,RD+3,-7,92,7,7,[0,-34.8,0]); U('TRIM',52,LD-3,-7,92,7,7,[0,-34.8,0]);   /* slim A-pillars, so the door mirrors show whole */
   U('TRIM',14,CL,20,14,WD+22,10); U('TRIM',-80,CL,25,190,WD+22,8);
@@ -1514,6 +1666,140 @@ const wheelSpin = new THREE.Group(), stdWheel = new THREE.Group(), helm = new TH
   holder.add(wheelSpin); car.add(holder);
 })();
 
+/* ---- cockpit detail after the user's photo (09-28, a sports coupe): three-dial cluster under
+   the hood, nav screen, red-ringed round vents, silver dash trim, door handle and armrest,
+   a console with the shifter, and the driver's hands on the wheel ---- */
+const cabTexMat = (tex, k = 0.8) => new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, color: new THREE.Color(k, k, k) });
+function cabQuad(mat, x, y, z, w, h, yaw = 0, pitch = 0){
+  const m = onLayer1(new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat));
+  m.rotation.order = 'YXZ'; m.rotation.set(pitch, -Math.PI/2 + yaw, 0); m.position.set(x, y, z); car.add(m); return m;
+}
+function cabAttrs(geo, col, emi = 0){
+  const n = geo.attributes.position.count, nrm = geo.attributes.normal, c = new Float32Array(n*3), e = new Float32Array(n);
+  for (let i = 0; i < n; i++){ const sh = 0.7 + 0.3*Math.abs(nrm ? nrm.getY(i) : 1); c[i*3] = col[0]*sh; c[i*3+1] = col[1]*sh; c[i*3+2] = col[2]*sh; e[i] = emi; }
+  geo.setAttribute('aCol', new THREE.BufferAttribute(c, 3)); geo.setAttribute('aEmi', new THREE.BufferAttribute(e, 1)); return geo;
+}
+const cabMesh = (geo, col, emi) => onLayer1(new THREE.Mesh(cabAttrs(geo, col, emi), cabMat));
+/* the cluster: speed left, tacho in the middle, fuel / temperature right; redrawn ~12 times a second */
+const meterCv = signCanvas(640, 240), meterTex = new THREE.CanvasTexture(meterCv);
+const METER = { t: 0, rpm: 900 };
+function drawMeter(kmh, shownKmh){
+  const g = meterCv.getContext('2d'), W = 640, H = 240;
+  g.fillStyle = '#050506'; g.fillRect(0, 0, W, H);
+  const dial = (cx, cy, r, a0, a1, n, sub, lab, val, vmax, red) => {
+    g.fillStyle = '#0b0c0e'; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.fill();
+    g.strokeStyle = '#7d8088'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, r - 2, 0, Math.PI*2); g.stroke();
+    const A = t => (a0 + (a1 - a0) * t) * D2R;
+    if (red){ g.strokeStyle = '#d0201a'; g.lineWidth = 8; g.beginPath(); g.arc(cx, cy, r - 14, A(red) - Math.PI/2, A(1) - Math.PI/2); g.stroke(); }
+    g.strokeStyle = '#f2f2f2'; g.fillStyle = '#f2f2f2'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let i = 0; i <= n * sub; i++){
+      const a = A(i / (n * sub)) - Math.PI/2, big = i % sub === 0, r0 = r - (big ? 22 : 15);
+      g.lineWidth = big ? 3 : 1.5; g.beginPath(); g.moveTo(cx + Math.cos(a)*r0, cy + Math.sin(a)*r0); g.lineTo(cx + Math.cos(a)*(r - 8), cy + Math.sin(a)*(r - 8)); g.stroke();
+      if (big && lab){ g.font = `700 ${Math.round(r * 0.17)}px ${SIGNFONT}`; g.fillText(lab(i / sub), cx + Math.cos(a)*(r - 38), cy + Math.sin(a)*(r - 38)); }
+    }
+    const a = A(clamp(val / vmax, 0, 1.02)) - Math.PI/2;
+    g.strokeStyle = '#ff2a1a'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx - Math.cos(a)*14, cy - Math.sin(a)*14); g.lineTo(cx + Math.cos(a)*(r - 12), cy + Math.sin(a)*(r - 12)); g.stroke();
+    g.fillStyle = '#1a1b1e'; g.beginPath(); g.arc(cx, cy, 11, 0, Math.PI*2); g.fill();
+  };
+  dial(118, 128, 96, -130, 130, 13, 2, i => String(i * 20), kmh, 260, 0);
+  dial(320, 118, 112, -125, 125, 9, 4, i => String(i), METER.rpm / 1000, 9, 7.4 / 9);
+  g.fillStyle = '#f2f2f2'; g.font = `700 20px ${SIGNFONT}`; g.textAlign = 'center'; g.fillText('x1000r/min', 320, 170);
+  g.font = `700 30px ${SIGNFONT}`; g.fillText(String(shownKmh), 320, 206);
+  g.font = `700 14px ${SIGNFONT}`; g.fillText('km/h', 362, 212);
+  /* right: fuel and water temperature bars, a trip readout */
+  g.fillStyle = '#0b0c0e'; g.beginPath(); g.arc(522, 128, 96, 0, Math.PI*2); g.fill();
+  g.strokeStyle = '#7d8088'; g.lineWidth = 4; g.beginPath(); g.arc(522, 128, 94, 0, Math.PI*2); g.stroke();
+  g.fillStyle = '#f2f2f2'; g.font = `700 18px ${SIGNFONT}`; g.fillText('E', 470, 78); g.fillText('F', 574, 78); g.fillText('C', 470, 112); g.fillText('H', 574, 112);
+  for (let i = 0; i < 8; i++){ g.fillStyle = i < 6 ? '#e8e8e8' : '#333'; g.fillRect(484 + i * 11, 70, 8, 16); }
+  for (let i = 0; i < 8; i++){ g.fillStyle = i < 4 ? '#e8e8e8' : '#333'; g.fillRect(484 + i * 11, 104, 8, 16); }
+  g.font = `700 22px ${SIGNFONT}`; g.fillText('ODO 84213', 522, 156); g.fillText(`${((clock * 0.02) % 100 + 12.4).toFixed(1)} km`, 522, 184);
+  meterTex.needsUpdate = true;
+}
+const navCv = signCanvas(320, 200), navTex = new THREE.CanvasTexture(navCv);
+(function drawNav(){
+  const g = navCv.getContext('2d');
+  g.fillStyle = '#0c1422'; g.fillRect(0, 0, 320, 200);
+  g.strokeStyle = '#1d2b40'; g.lineWidth = 1;
+  for (let i = 0; i < 16; i++){ g.beginPath(); g.moveTo(i * 24 - 60, 0); g.lineTo(i * 24 + 40, 200); g.stroke(); g.beginPath(); g.moveTo(0, i * 16); g.lineTo(320, i * 16 - 30); g.stroke(); }
+  g.strokeStyle = '#3a5a86'; g.lineWidth = 5; g.beginPath(); g.moveTo(20, 30); g.bezierCurveTo(120, 60, 110, 140, 300, 170); g.stroke();
+  g.strokeStyle = '#f0a030'; g.lineWidth = 7; g.beginPath(); g.moveTo(160, 200); g.lineTo(162, 120); g.bezierCurveTo(165, 80, 190, 60, 230, 30); g.stroke();
+  g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(160, 150); g.lineTo(148, 176); g.lineTo(160, 169); g.lineTo(172, 176); g.closePath(); g.fill();
+  g.fillStyle = '#1a2436'; g.fillRect(0, 0, 320, 26);
+  g.fillStyle = '#dfe6f0'; g.font = `700 16px ${SIGNFONT}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('夜見高速　八番IC方面', 8, 13);
+  navTex.needsUpdate = true;
+})();
+(function buildCockpitDetail(){
+  /* the cluster face behind the wheel, under its hood */
+  cabQuad(cabTexMat(meterTex), 0.478, 0.93, 0.35, 0.44, 0.165, 0, -0.22);
+  const bz = new B();
+  /* silver strip across the dash, with the red accent line of the photo */
+  bz.box(0.60, 0.86, -0.20, 0.02, 0.012, 0.95, [0.5, 0.52, 0.56]);
+  /* centre stack: nav screen bezel, the red clock / A/C readout, hazard button, knobs */
+  /* (on the face of the lower dash, which comes back to x 0.53) */
+  bz.box(0.52, 0.84, -0.02, 0.02, 0.17, 0.29, [0.03, 0.03, 0.035], 0, 1, 10 * D2R);
+  bz.box(0.52, 0.725, -0.02, 0.02, 0.05, 0.18, [0.03, 0.03, 0.035], 0, 1, 10 * D2R);
+  bz.box(0.508, 0.725, -0.07, 0.004, 0.022, 0.06, [1.0, 0.18, 0.1], 1.4, 1, 10 * D2R);     /* red clock digits */
+  bz.box(0.508, 0.727, 0.01, 0.006, 0.02, 0.02, [1.0, 0.25, 0.15], 0.9, 1, 10 * D2R);     /* hazard */
+  for (const dz of [-0.09, 0.05]){ bz.box(0.515, 0.665, dz, 0.03, 0.045, 0.045, [0.12, 0.12, 0.13]); bz.box(0.499, 0.665, dz, 0.004, 0.05, 0.05, [0.7, 0.08, 0.06], 0.25); }
+  /* console and shifter between the seats */
+  bz.box(0.25, 0.52, -0.02, 0.8, 0.12, 0.2, [0.05, 0.05, 0.055]);
+  bz.box(0.12, 0.62, -0.02, 0.04, 0.12, 0.04, [0.08, 0.08, 0.09]); bz.box(0.12, 0.69, -0.02, 0.06, 0.05, 0.06, [0.1, 0.1, 0.11]);
+  /* driver's door: armrest, silver pull handle, window switches, the red stitching line */
+  bz.box(0.05, 0.84, 0.80, 0.55, 0.06, 0.1, [0.06, 0.06, 0.065]);
+  bz.box(0.30, 0.95, 0.83, 0.12, 0.03, 0.02, [0.55, 0.56, 0.6], 0.05);
+  bz.box(0.10, 0.875, 0.80, 0.12, 0.012, 0.06, [0.2, 0.2, 0.22], 0.15);
+  bz.box(0.10, 1.00, 0.84, 0.9, 0.006, 0.006, [0.7, 0.1, 0.1], 0.15);
+  car.add(onLayer1(new THREE.Mesh(bz.geo(), cabMat)));
+  /* nav */
+  cabQuad(cabTexMat(navTex, 0.7), 0.508, 0.845, -0.02, 0.25, 0.15, 10 * D2R, 0);
+  /* round vents with red rings: driver's side by the door, both ends of the dash, and two
+     little ones either side of the cluster hood */
+  for (const [x, y, z, r] of [[0.60, 0.94, 0.66, 0.05], [0.66, 0.93, -0.72, 0.05], [0.56, 0.99, 0.08, 0.03], [0.56, 0.99, 0.62, 0.03]]){
+    const ring = cabMesh(new THREE.TorusGeometry(r, 0.012, 8, 28), [0.72, 0.06, 0.05], 0.08);
+    const hole = cabMesh(new THREE.CylinderGeometry(r * 0.9, r * 0.9, 0.03, 20).rotateX(Math.PI/2), [0.02, 0.02, 0.025]);
+    const vane = cabMesh(new THREE.BoxGeometry(r * 1.7, 0.006, 0.01), [0.25, 0.25, 0.27]);
+    for (const m of [ring, hole, vane]){ m.position.set(x, y, z); m.rotation.y = -Math.PI/2; car.add(m); }
+  }
+})();
+/* the driver's hands on the wheel (about ten-to-two, like the photo), forearms bare from the
+   elbow, dark sleeves above. The hands ride on the wheel; the forearms are re-aimed each frame. */
+const ARMS = [];
+(function buildArms(){
+  const skin = [0.62, 0.47, 0.38], sleeve = [0.04, 0.04, 0.045];
+  for (const [a, elbow] of [[160, [0.08, 0.78, 0.07]], [20, [0.08, 0.78, 0.66]]]){
+    const hand = new THREE.Group(), r = 0.185, t = a * D2R;
+    hand.position.set(Math.cos(t) * r, Math.sin(t) * r, 0.012);
+    const palm = cabMesh(new THREE.BoxGeometry(0.075, 0.095, 0.05), skin);
+    const thumb = cabMesh(new THREE.BoxGeometry(0.025, 0.05, 0.025), skin); thumb.position.set(0, 0, -0.03);
+    hand.add(palm, thumb); hand.rotation.z = t; stdWheel.add(hand);
+    const fore = cabMesh(new THREE.CylinderGeometry(0.03, 0.036, 1, 10), skin);
+    const cuff = cabMesh(new THREE.CylinderGeometry(0.048, 0.048, 1, 10), sleeve);
+    const upper = cabMesh(new THREE.CylinderGeometry(0.05, 0.055, 1, 10), sleeve);
+    car.add(fore, cuff, upper);
+    ARMS.push({ hand, fore, cuff, upper, elbow: new THREE.Vector3(...elbow), shoulder: new THREE.Vector3(-0.3, 0.98, elbow[2] < 0.35 ? 0.12 : 0.58) });
+  }
+})();
+const _hv = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _d = new THREE.Vector3();
+function aimLimb(m, a, b, frac0 = 0, frac1 = 1){
+  _d.subVectors(b, a); const L = _d.length();
+  m.scale.set(1, L * (frac1 - frac0), 1);
+  m.position.copy(a).addScaledVector(_d, (frac0 + frac1) / 2);
+  m.quaternion.setFromUnitVectors(_up, _d.normalize());
+}
+function updateArms(){
+  car.updateMatrixWorld(true);
+  for (const A of ARMS){
+    A.hand.visible = stdWheel.visible;
+    A.hand.getWorldPosition(_hv); car.worldToLocal(_hv);
+    aimLimb(A.fore, A.elbow, _hv, 0.3, 0.93); aimLimb(A.cuff, A.elbow, _hv, 0, 0.32); aimLimb(A.upper, A.shoulder, A.elbow);
+  }
+  METER.t += 1;
+  if (METER.t % 5 === 1){
+    const kmh = Math.round(P.v * 3.6), gear = Math.min(6, 1 + Math.floor(kmh / 32));
+    METER.rpm = P.dead ? 0 : 900 + (kmh - (gear - 1) * 28) * 95 + (gear > 1 ? 1500 : 0);
+    drawMeter(kmh, anomaly === 16 ? kmh * 10 : kmh);
+  }
+}
 /* anomaly 1, grown in by degrees (k 0..1): the wheel's three spokes draw back into the hub while
    the ship's wheel's eight spokes and inner ring grow out of it and its handles sprout from the
    rim. The ordinary rim and hub stay throughout (the helm's own are hidden), swelling a hair. */
@@ -2087,8 +2373,47 @@ const family = (() => {
   kid.g.scale.setScalar(0.62);
   return { wife, kid };
 })();
-/* ending 1: a man across the street, just standing there, watching you */
-const gaya = (() => { const o = personModel(false, [0.24, 0.24, 0.26]); o.g.children[0].rotation.z = 0; return o; })();
+/* ending 1: a man on the far pavement, his back to you, strolling away down the street - but
+   his head turned toward the family at the gate. Dressed after the user's photo (09-28): black
+   cap, black scarf, short indigo denim jacket over a black top, olive cargo trousers with side
+   pockets, a gold wallet chain, black boots, hands in his pockets. Built facing +x. */
+const gaya = (() => {
+  const g = new THREE.Group(), mk = fill => { const b = new B(); fill(b); return new THREE.Mesh(b.geo(), worldMat); };
+  const DENIM = [0.09, 0.12, 0.26], BLACK = [0.035, 0.035, 0.04], OLIVE = [0.3, 0.33, 0.22], SKIN = [0.5, 0.42, 0.36], GOLD = [0.75, 0.62, 0.25];
+  g.add(mk(b => {
+    b.box(0, 1.08, 0, 0.21, 0.36, 0.38, BLACK);                                  /* black top showing under the jacket */
+    b.box(0, 1.2, 0, 0.26, 0.4, 0.46, DENIM);                                    /* short denim jacket */
+    b.box(0, 1.01, 0, 0.27, 0.05, 0.47, [0.07, 0.1, 0.22]);                      /* its waistband */
+    for (const z of [-0.11, 0.11]) b.box(0.132, 1.28, z, 0.012, 0.1, 0.1, [0.07, 0.1, 0.22]);   /* chest pockets */
+    b.box(-0.132, 1.2, 0, 0.012, 0.3, 0.012, [0.16, 0.2, 0.36]);                 /* back seam */
+    for (const s of [-1, 1]) b.box(0, 1.17, s * 0.275, 0.13, 0.42, 0.11, DENIM); /* arms down, hands in pockets */
+    b.box(0.02, 1.42, 0, 0.22, 0.1, 0.3, BLACK);                                 /* scarf round the neck */
+    b.box(0.13, 1.26, -0.06, 0.035, 0.34, 0.09, BLACK); b.box(0.13, 1.24, 0.05, 0.035, 0.28, 0.08, BLACK);
+    b.box(0, 0.93, 0, 0.24, 0.1, 0.4, OLIVE);                                    /* trousers' seat */
+    b.box(0.06, 0.86, -0.2, 0.03, 0.02, 0.02, GOLD);
+    for (let i = 0; i < 6; i++) b.box(0.08 - i * 0.03, 0.85 - Math.sin(i / 5 * Math.PI) * 0.1, -0.215, 0.03, 0.012, 0.012, GOLD, 0.2);   /* wallet chain */
+  }));
+  const legs = [];
+  for (const z of [-0.1, 0.1]){
+    const piv = new THREE.Group(); piv.position.set(0, 0.9, z);
+    piv.add(mk(b => {
+      b.box(0, -0.42, 0, 0.18, 0.84, 0.18, OLIVE);                               /* loose cargo leg */
+      b.box(0, -0.38, Math.sign(z) * 0.1, 0.13, 0.17, 0.03, [0.27, 0.3, 0.2]);   /* side pocket */
+      b.box(0.04, -0.84, 0, 0.29, 0.12, 0.14, BLACK);                           /* boot */
+    }));
+    g.add(piv); legs.push(piv);
+  }
+  const head = new THREE.Group(); head.position.set(0, 1.47, 0);
+  head.add(mk(b => {
+    b.box(0, 0.1, 0, 0.19, 0.24, 0.18, SKIN, 0.05); addFace(b, 0.096, 0.1, 0, 1);
+    b.box(-0.01, 0.24, 0, 0.22, 0.08, 0.21, BLACK);                               /* cap */
+    b.box(0.14, 0.21, 0, 0.1, 0.02, 0.19, BLACK);                                 /* its peak */
+  }));
+  g.add(head);
+  g.visible = false; scene.add(g);
+  return { g, legs, head };
+})();
+const GW = { z: 0 };
 /* ending 4: six police officers, caps on; the first one walks up to your window */
 function makeOfficer(){
   /* the Tokyo summer uniform: light-blue long-sleeved shirt, navy vest with the badge, black
@@ -2186,7 +2511,7 @@ function playerPose(o){
   o.x = P.x; o.y = 0; o.z = P.d; o.th = 0; o.pt = 0; return o;
 }
 function lateralBounds(){
-  if (P.homeLeg) return [-2.6, 2.6];
+  if (P.homeLeg){ const k = 2.6 - 1.2 * sm((P.s - P.hp.tollS + 40) / 25) * sm((P.hp.tollS + 14 - P.s) / 10); return [-k, k]; }   /* the middle booth lane */
   if (P.onExit) return [-1.55, 1.55];
   let lo = -5.6;
   if (P.x >= DECEL_START && P.x < FORK) lo = lerp(-5.6, -8.6, sm((P.x - DECEL_START) / (DECEL_FULL - DECEL_START)));
@@ -2430,7 +2755,7 @@ const ANOMALIES = {
   38: '困った運輸のローマ字が「KOMATENAI UNYU」になっている', 39: '困った運輸のトラックの後ろが開いて、荷物が次々落ちている',
   40: 'ルームミラーがヤンキー風にめちゃくちゃ斜めになっている',
   41: 'トンネルの形が微妙に歪んでいる',
-  42: 'オービスが、車が前を通るたびにやたらパシャパシャ撮影する',
+  42: 'オービスのカメラの代わりにスマホを持った人が座って、車が通るたびに撮影している',
   43: 'トンネルの非常口がやたらたくさんある',
   44: 'トンネル手前の看板の「ラジオ」が「オジヤ」になっている',
   49: '白線の太さが半分になっている',
@@ -2448,12 +2773,16 @@ const LAP2_IDS = [28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40];   /* the patr
 let noInd = false;                     // anomaly 29, while it is showing
 /* how easy each one is to spot (see the list in DESIGN.md), and the share of each kind among
    the zones that have an anomaly */
-const DIFF = {
-  easy:   [1, 2, 7, 9, 12, 17, 18, 19, 21, 25, 26, 31, 33, 34, 35, 37, 39, 40, 42, 43, 46, 47],
-  medium: [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
-  hard:   [5, 10, 16, 20, 23, 28, 29, 36, 38, 44, 49],
-};
-const DIFF_SHARE = { easy: 0.225, medium: 0.41, hard: 0.365 };   /* 09-28: 5 points moved from hard to medium */
+/* 5 levels (09-28): 1 = can't miss it ... 5 = very hard. 1 (舵) and 40 (mirror) change slowly,
+   so they count as level 4. */
+const DIFF = [
+  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46],
+  [12, 17, 20, 25, 31, 35, 42, 43, 47],
+  [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
+  [1, 5, 10, 16, 23, 29, 36, 40],
+  [28, 38, 44, 49],
+];
+const DIFF_SHARE = [0.10, 0.125, 0.41, 0.21, 0.155];   /* old easy 0.225 = 1+2, medium = 3, old hard 0.365 = 4+5 */
 const KT = { on: false, x: 0, z: 0, v: 0 };   // the 困った運輸 truck
 const PT = { on: false, x: 0, z: 0, v: 0, lane: 1, sx: 1 };   // the patrol car (sx: its length, 1 = normal)
 const BK = { on: false, x: 0, z: 0, v: 0, phase: 0, t: 0, wheel: 0, scale: 1, mode: 0, twin: false };
@@ -2584,7 +2913,8 @@ function rollAnomaly(){
   const pool = ANOM_IDS.filter(id => (P.sections >= 3 || !BIKER_IDS.includes(id)) && (P.sections >= 1 || !LAP2_IDS.includes(id)));
   anomaly = 0;
   if (Math.random() < 0.6){
-    const q = Math.random(), cls = q < DIFF_SHARE.easy ? 'easy' : q < DIFF_SHARE.easy + DIFF_SHARE.medium ? 'medium' : 'hard';
+    let q = Math.random(), cls = 0;
+    while (cls < 4 && q >= DIFF_SHARE[cls]){ q -= DIFF_SHARE[cls]; cls++; }
     let list = DIFF[cls].filter(id => pool.includes(id));
     if (!list.length) list = pool;
     anomaly = list[Math.floor(Math.random() * list.length)];
@@ -2727,7 +3057,7 @@ function startHomeLeg(){
   if (P.crashes > 0 && P.endingNo >= 3) rivers.get(mainSide).visible = true;
   (mainSide ? police.main : police.home).visible = P.endingNo === 4;
   gaya.g.visible = P.endingNo === 1;
-  gaya.g.position.set(tx - 4.6, groundY(hz - 1), hz - 1);
+  GW.z = hz + 8; gaya.g.position.set(tx - 4.3, groundY(GW.z), GW.z); gaya.g.rotation.y = Math.PI / 2;   /* facing down the street, away from you */
   const spots = [[4.4, 1.2], [4.7, -3.0], [-0.3, -9.5], [3.2, -8.0], [-3.8, 2.5], [-4.2, -6.5]];
   officers.forEach((o, i) => {
     const x = tx + spots[i][0], z = hz + spots[i][1];
@@ -2901,7 +3231,12 @@ function step(dt){
   }
   if (PT.on){
     let target = Math.max(30, P.v + 16);
-    for (const c of traffic) if (!c.onc && Math.abs(c.z - PT.z) < 2 && c.x > PT.x && c.x - PT.x < 26 + c.hl) target = Math.min(target, c.v);
+    /* cars ahead in (or moving into) its path: brake early enough for the closing speed (09-28: it used to run into them) */
+    for (const c of traffic){
+      if (c.onc || c.parked || c.x <= PT.x || Math.abs(c.z - PT.z) > 2.4) continue;
+      const gap = c.x - c.hl - (PT.x + 2.3 * PT.sx);
+      if (gap < 30 + Math.max(0, PT.v - c.v) * 1.6) target = Math.min(target, c.v + Math.max(0, gap - 6) * 0.35);
+    }
     if (BK.on && Math.abs(BK.z - PT.z) < 2 && BK.x > PT.x && BK.x - PT.x < 18 + 2.3 * PT.sx) target = Math.min(target, BK.v);   /* never through the biker */
     /* it never runs into you: if you are in its lane ahead, it hangs back about 14 m and goes round
        you in another lane. (Swerve into it yourself and it is still a crash.) */
@@ -2915,7 +3250,14 @@ function step(dt){
     }
     const dz = clamp(LANES[PT.lane] - PT.z, -2.2 * dt, 2.2 * dt);
     PT.z += dz; PT.th = Math.atan2(dz, Math.max(0.05, PT.v * dt));
-    PT.v += clamp(target - PT.v, -8 * dt, 5 * dt); PT.x += PT.v * dt;
+    PT.v += clamp(target - PT.v, -14 * dt, 5 * dt); PT.x += PT.v * dt;
+    /* last resort: never overlap a car or the biker */
+    for (const c of traffic){
+      if (c.onc || c.parked || Math.abs(c.z - PT.z) > 1.9 || c.x < PT.x) continue;
+      const lim = c.x - c.hl - 2.3 * PT.sx - 0.4;
+      if (PT.x > lim){ PT.x = lim; PT.v = Math.min(PT.v, c.v); }
+    }
+    if (BK.on && Math.abs(BK.z - PT.z) < 1.6 && BK.x > PT.x){ const lim = BK.x - 1.1 * BK.scale - 2.3 * PT.sx - 0.4; if (PT.x > lim){ PT.x = lim; PT.v = Math.min(PT.v, BK.v); } }
     if (PT.x - pose.x > 350 || P.homeLeg) PT.on = false;
   }
   if (BK.pending && !P.onExit && !P.homeLeg){ BK.pending = false; spawnBiker(); spawnKomatta(); }
@@ -3078,6 +3420,7 @@ function orbisWatch(){
 function orbisDraw(){
   let screen = 0;
   ORB.flashes = ORB.flashes.filter(f => clock - f.t < 0.5);
+  if (orbSitters.visible) ORB.flashes.length = 0;   /* the people with phones just shoot, no flash (09-28) */
   for (const f of ORB.flashes){
     const a = clock - f.t, k = (a < 0.06 ? 1 : 0) + (a > 0.17 && a < 0.23 ? 0.85 : 0);   /* パシャ、パシャ */
     if (k <= 0) continue;
@@ -3114,7 +3457,7 @@ function sync(){
      first 600 m of the zone - and turns back as quietly after the fork */
   const helmT = anomaly === 1 && z ? sm(clamp((P.x - ZONE_A - 20) / 600, 0, 1)) : 0;
   HELM.k += clamp(helmT - HELM.k, -0.1 * sdt, 0.5 * sdt);
-  morphWheel(HELM.k);
+  morphWheel(HELM.k); updateArms();
   backseat.visible = anomaly === 10 && z;
   car.updateMatrixWorld(true);
   cam.getWorldPosition(camW);
@@ -3138,7 +3481,15 @@ function sync(){
   }
   /* the endings' people turn to watch you; in ending 4 one officer walks to your window */
   const face = o => { o.g.rotation.y = -Math.atan2(camW.z - o.g.position.z, camW.x - o.g.position.x); };
-  if (gaya.g.visible) face(gaya);
+  if (gaya.g.visible){
+    const HPg = P.hp, hzg = HPg.streetZ1 + 14, walking = P.s > HPg.L - 90 && GW.z > hzg - 22;
+    if (walking) GW.z -= 0.85 * ldt;
+    const sw = walking ? Math.sin(nowT * 5.3) : 0, gz = gaya.g.position;
+    gz.z = GW.z; gz.y = groundY(GW.z) + (walking ? Math.abs(Math.cos(nowT * 5.3)) * 0.02 : 0);
+    gaya.legs[0].rotation.z = 0.32 * sw; gaya.legs[1].rotation.z = -0.32 * sw;
+    const fam = family.wife.g.position, want = -Math.atan2(fam.z - gz.z, fam.x - gz.x) - gaya.g.rotation.y;
+    gaya.head.rotation.y = clamp(Math.atan2(Math.sin(want), Math.cos(want)), -1.6, 1.6);   /* looking back at the family */
+  }
   if (officers[0].g.visible){
     const pr = clamp((P.endT - 0.6) / 3.0, 0, 1), o = officers[0], moving = pr > 0 && pr < 1, sw = moving ? Math.sin(nowT * 7) : 0;
     o.g.position.x = lerp(WALK.sx, WALK.tx, pr); o.g.position.z = lerp(WALK.sz, WALK.tz, pr);
@@ -3232,6 +3583,8 @@ function sync(){
   /* the tunnel anomalies built as overlays, moved onto the nearest copy of the tunnel */
   const tunX = SECTION * Math.round((pose.x - (TUN_A + TUN_B) / 2) / SECTION);
   for (const [o, id] of [[manyExits, 43], [peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
+  orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
+  for (const m of orbCams) m.visible = !orbSitters.visible;
   if (KT.on){
     const k = KT.fade * KT.fade * (3 - 2 * KT.fade); KHIDE.value = 1 - k;
     komatta.position.set(KT.x, 0, KT.z); carLampGlows(KT.x, 0, KT.z, 0, 5.5, true, anomaly === 47 ? 2 : 0, (clock * 1.4 + 0.3) % 1 < 0.5, k, k);
