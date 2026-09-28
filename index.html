@@ -56,7 +56,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 #pause{display:flex;align-items:center;justify-content:center;gap:6px;}
 #pause .bar{display:block;width:4px;height:16px;border-radius:1px;background:var(--ink);}
 #snd{right:calc(64px + env(safe-area-inset-right,0px));font-size:15px;letter-spacing:0;z-index:5;}
-#fs{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(116px + env(safe-area-inset-right,0px));width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-edge);background:var(--glass);color:var(--ink);font:700 15px/1 "BIZ UDPGothic",system-ui,sans-serif;z-index:5;cursor:pointer;}
+#fs{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(116px + env(safe-area-inset-right,0px));width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-edge);background:var(--glass);color:var(--ink);font:700 13px/1 "BIZ UDPGothic",system-ui,sans-serif;z-index:5;cursor:pointer;}
 #snd.off{opacity:.55;text-decoration:line-through;}
 
 #touch{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;
@@ -156,7 +156,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 <div id="speed"><b id="kmh">80</b><span>km/h</span></div>
 <button id="pause" type="button" aria-label="一時停止" hidden><span class="bar"></span><span class="bar"></span></button>
 <button id="snd" type="button" aria-label="音を消す" aria-pressed="true" hidden>音</button>
-<button id="fs" type="button" aria-label="全画面" hidden>全</button>
+<button id="fs" type="button" aria-label="全画面" hidden>フル</button>
 <div id="dbgHud" hidden><button id="dbgPrev" type="button" aria-label="前の異変">◀</button><span id="dbgTxt"></span><button id="dbgNext" type="button" aria-label="次の異変">▶</button></div>
 <div id="rotate" hidden>横向きにすると見やすくなります</div>
 <div id="touch" hidden>
@@ -200,7 +200,8 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <h1 id="ttl">8番インターチェンジ</h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
-    <p class="rule small">エンディングは全部で4つ。</p>
+    <p class="rule small" id="endLine">エンディングは全部で4つ。</p>
+    <p class="rule small" id="iosTip" hidden>iPhoneは「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
       <thead><tr><th></th><th>アクセル</th><th>ブレーキ</th><th>ハンドル</th></tr></thead>
       <tbody>
@@ -438,8 +439,8 @@ const HOME_M = (() => {
 })();
 const homePose = (s, d, o) => pathPose(HOME, s, d, o);
 const BARRICADE_S = 24;                // where the closed road is fenced off
-const EX_TOLL_OUT = 105, EX_TOLL_IN = 330;   // the ramp's two toll gates (09-28)
-const nearToll = (s, r) => Math.abs(s - EX_TOLL_OUT) < r || Math.abs(s - EX_TOLL_IN) < r;
+const EX_TOLL = 190;                   // the ramp's one toll gate, about halfway round (09-28)
+const nearToll = (s, r) => Math.abs(s - EX_TOLL) < r;
 /* where the returning ramp comes alongside the main line: from here they share a lane edge,
    so the ramp loses its inner rail and the main line its left one - and the player is handed
    to the main line and may move right at any point */
@@ -1319,6 +1320,7 @@ function buildSection(){
     };
     for (const side of [-1, 1]) for (let z = zA - 8; z > zB + 4; z -= 16){
       if (side === 1 && Math.abs(z - HOUSE_Z) < 13) continue;
+      if (side === -1 && Math.abs(z - (HOUSE_Z - 10)) < 10) continue;   /* the side street the man in ending 1 turns into */
       house(side, z + (hr() - 0.5) * 2, 9 + hr() * 3, 5.4 + hr() * 0.8, false);
     }
     {
@@ -1340,6 +1342,12 @@ function buildSection(){
       b.box(wallX, gy + 0.55, HOUSE_Z - 3.2, 0.25, 1.1, 5.6, [0.55, 0.54, 0.5]);
       b.box(wallX, gy + 0.55, HOUSE_Z + 5.0, 0.25, 1.1, 2.4, [0.55, 0.54, 0.5]);
       b.box(wallX - 0.2, gy + 1.15, HOUSE_Z + 3.6, 0.3, 0.35, 0.45, [0.7, 0.18, 0.12]);
+    }
+    { /* that side street: a narrow lane off to the left between the houses */
+      const az = HOUSE_Z - 10, gy2 = groundY(az) + 0.16, ba = Wb(tx - 20);
+      ba.quad([tx - 3.0, gy2, az - 1.8], [tx - 45, gy2, az - 1.8], [tx - 45, gy2, az + 1.8], [tx - 3.0, gy2, az + 1.8], COL.asphalt);
+      for (const s2 of [-1, 1]) ba.box(tx - 24, groundY(az) + 0.8, az + s2 * 2.4, 40, 1.6, 0.2, [0.52, 0.51, 0.47]);   /* block walls either side */
+      for (const [hx, dz2] of [[-13, -7.5], [-13, 7.5], [-30, -7.5], [-30, 7.5]]) ba.box(tx + hx, groundY(az) + 2.8, az + dz2, 8, 5.6, 9, [0.5, 0.48, 0.44]);
     }
     for (let z = zA - 20; z > zB; z -= 34){
       const base = { x: tx - 4.3, y: groundY(z), z, th: -Math.PI/2 }, head = { x: tx - 2.0, y: groundY(z), z, th: -Math.PI/2 };
@@ -1387,7 +1395,7 @@ function buildSection(){
     const fs = TS - 4.06, v0 = kind === 'exit' ? 1 - 832/1024 : 0, v1 = kind === 'exit' ? 1 - 640/1024 : 1 - 832/1024;
     tollB.quad(ex(fs, -2.1, 5.52), ex(fs, 2.1, 5.52), ex(fs, 2.1, 6.3), ex(fs, -2.1, 6.3), [1,1,1], 0.45, 1, [0,v0, 1,v0, 1,v1, 0,v1]);
   };
-  tollRamp(EX_TOLL_OUT, 'exit'); tollRamp(EX_TOLL_IN, 'entry');
+  tollRamp(EX_TOLL, 'exit');
 
   /* assemble */
   const g = new THREE.Group();
@@ -1469,6 +1477,39 @@ const orbSitters = (() => {
   g.add(m); g.visible = false; scene.add(g);
   return g;
 })();
+/* ETC gate bars (09-28, after the user's photo): a red-and-white boom across the lane at every
+   toll gate, hinged at the booth side. It lifts as you come up to it with the navi's 「ポーン」,
+   and drops again once you are through. */
+const GATES = (() => {
+  const mk = (HP, s, dHinge, len) => {
+    const p = pathPose(HP, s, dHinge, {}), g = new THREE.Group(), b = new B();
+    b.box(0, 0.5, 0, 0.36, 1.0, 0.36, [0.85, 0.72, 0.12]);                          /* the boom's post */
+    b.box(0, 1.02, 0, 0.3, 0.06, 0.3, [0.15, 0.15, 0.16]);
+    const arm = new THREE.Group(); arm.position.set(0, 0.92, 0); g.add(arm);
+    const ab = new B();
+    for (let x = 0.1, k = 0; x < len; x += 0.5, k++) ab.box(x + 0.25, 0, 0, 0.5, 0.09, 0.07, k % 2 ? [0.95, 0.95, 0.93] : [0.85, 0.08, 0.06], 0.18);
+    arm.add(new THREE.Mesh(ab.geo(), worldMat));
+    g.add(new THREE.Mesh(b.geo(), worldMat));
+    g.position.set(p.x, p.y, p.z); g.rotation.y = Math.PI / 2 - p.th;           /* local +x reaches across the lane, to your left */
+    scene.add(g);
+    return { g, arm, HP, s, x0: p.x, a: 0, open: false };
+  };
+  return [
+    mk(EX, EX_TOLL + 2, 2.6, 5.1),
+    mk(HOME, HOME.tollS + 2, 2.85, 5.6), mk(HOME_M, HOME_M.tollS + 2, 2.85, 5.6),
+  ];
+})();
+function updateGates(dt){
+  for (const G of GATES){
+    const onIt = G.HP === EX ? P.onExit && !P.homeLeg : P.homeLeg && P.hp === G.HP;
+    const ds = G.s - P.s, want = onIt && ds < 16 && ds > -9;
+    if (want && !G.open) sndGate();
+    G.open = want;
+    G.a += clamp((want ? 1.45 : 0) - G.a, -1.6 * dt, 2.6 * dt);
+    G.arm.rotation.z = G.a;
+    if (G.HP === EX) G.g.position.x = G.x0 + SECTION * Math.round((pose.x - G.x0) / SECTION);
+  }
+}
 const orbCams = [];
 scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); });
 /* pristine copies, so each new section can start from a clean slate */
@@ -1607,7 +1648,7 @@ const mirrorPivot = new THREE.Group(); mirrorPivot.position.set(0.385, 1.38, 0.1
   /* ported box-for-box from the UE cockpit script (s08_car). Cockpit origin = driver's eye,
      which sits 0.35 m right of the car centreline and 1.25 m up. */
   const b = new B();
-  const CC = { TRIM:[0.30,0.28,0.26], DASH:[0.15,0.15,0.16], CHROME:[0.55,0.56,0.60], GLOW:[0.95,0.62,0.28], BODY:[0.07,0.075,0.085], AMB:[0.15,0.45,1.0] };
+  const CC = { TRIM:[0.30,0.28,0.26], DASH:[0.15,0.15,0.16], CHROME:[0.55,0.56,0.60], GLOW:[0.95,0.62,0.28], BODY:[0.62,0.05,0.04], AMB:[0.15,0.45,1.0] };
   const EM = { GLOW: 0.35, AMB: 1.1 };
   const U = (m, cx, cy, cz, sx, sy, sz, rot = [0, 0, 0]) =>
     b.box(cx/100, 1.25 + cz/100, 0.35 + cy/100, sx/100, sz/100, sy/100, CC[m], EM[m] || 0, 1, rot[2]*D2R, rot[1]*D2R);
@@ -1627,14 +1668,34 @@ const mirrorPivot = new THREE.Group(); mirrorPivot.position.set(0.385, 1.38, 0.1
   /* (the mirror's housing is built with its glass, on a pivot of its own) */
   /* (the door mirrors are built with their glass and cameras, further down) */
   U('BODY',100,CL,-33,26,178,5,[0,16,0]);
-  U('DASH',190,CL,-58,150,160,18);                                       /* the engine under the hood */
-  U('BODY',196,CL+89,-35,176,6,16,[0,3.2,0]); U('BODY',196,CL-89,-35,176,6,16,[0,3.2,0]); U('BODY',282,CL,-50,24,180,16,[0,24,0]);
+  U('DASH',190,CL,-72,150,160,18);                                       /* the engine under the hood */
+  /* (the fenders and nose are part of the curved hood surface below, 09-28) */
   car.add(onLayer1(new THREE.Mesh(b.geo(), cabMat)));
   /* the hood on its own hinge at the base of the windscreen */
-  const hb = new B();
-  hb.box(0.879, 0.049, 0, 1.76, 0.05, 1.78, CC.BODY, 0, 1, 0, 3.2 * D2R);
-  hoodPivot = new THREE.Group(); hoodPivot.position.set(1.08, 0.80, 0.35 + CL / 100);
+  /* one rounded surface (09-28): a gentle crown, the fenders swelling up either side and rolling
+     off at the edges, the whole thing falling away forward and curling down at the nose. The
+     middle part is the hood proper, on its hinge (anomaly 37); the fenders stay put. */
+  const HL = 1.76, HW = 0.95;
+  const hoodH = (u, v) => {
+    const a = Math.abs(u), t = v / HL;
+    let h = -v * 0.07 - 0.16 * t ** 4;
+    h += 0.06 * (1 - (a / HW) ** 2);
+    h += 0.1 * Math.exp(-(((a - 0.72) / 0.11) ** 2)) * (0.6 + 0.4 * Math.sin(Math.PI * Math.min(1, t * 1.4)));
+    if (a > 0.8) h -= 0.3 * ((a - 0.8) / 0.15) ** 2;
+    return h;
+  };
+  const surf = (b, u0, u1, nu, ox, oy, oz) => {
+    const NV = 18, P3 = (u, v) => [ox + v, oy + hoodH(u, v), oz + u];
+    for (let i = 0; i < nu; i++) for (let j = 0; j < NV; j++){
+      const ua = u0 + (u1 - u0) * i / nu, ub = u0 + (u1 - u0) * (i + 1) / nu, va = HL * j / NV, vb = HL * (j + 1) / NV;
+      b.quad(P3(ua, va), P3(ua, vb), P3(ub, vb), P3(ub, va), CC.BODY);
+    }
+  };
+  const hb = new B(); surf(hb, -0.6, 0.6, 12, 0, 0, 0);
+  hoodPivot = new THREE.Group(); hoodPivot.position.set(1.08, 0.87, 0.35 + CL / 100);
   hoodPivot.add(onLayer1(new THREE.Mesh(hb.geo(), cabMat))); car.add(hoodPivot);
+  const fb = new B(); surf(fb, -HW, -0.6, 8, 1.08, 0.87, 0.35 + CL / 100); surf(fb, 0.6, HW, 8, 1.08, 0.87, 0.35 + CL / 100);
+  car.add(onLayer1(new THREE.Mesh(fb.geo(), cabMat)));
 })();
 
 /* steering wheel: spins about its own axis, tilted back toward the driver */
@@ -1727,7 +1788,7 @@ const navCv = signCanvas(320, 200), navTex = new THREE.CanvasTexture(navCv);
   g.strokeStyle = '#f0a030'; g.lineWidth = 7; g.beginPath(); g.moveTo(160, 200); g.lineTo(162, 120); g.bezierCurveTo(165, 80, 190, 60, 230, 30); g.stroke();
   g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(160, 150); g.lineTo(148, 176); g.lineTo(160, 169); g.lineTo(172, 176); g.closePath(); g.fill();
   g.fillStyle = '#1a2436'; g.fillRect(0, 0, 320, 26);
-  g.fillStyle = '#dfe6f0'; g.font = `700 16px ${SIGNFONT}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('夜見高速　八番IC方面', 8, 13);
+  g.fillStyle = '#dfe6f0'; g.font = `700 16px ${SIGNFONT}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('迷神高速　八番IC方面', 8, 13);
   navTex.needsUpdate = true;
 })();
 (function buildCockpitDetail(){
@@ -1752,6 +1813,19 @@ const navCv = signCanvas(320, 200), navTex = new THREE.CanvasTexture(navCv);
   bz.box(0.10, 0.875, 0.80, 0.12, 0.012, 0.06, [0.2, 0.2, 0.22], 0.15);
   bz.box(0.10, 1.00, 0.84, 0.9, 0.006, 0.006, [0.7, 0.1, 0.1], 0.15);
   car.add(onLayer1(new THREE.Mesh(bz.geo(), cabMat)));
+  /* ambient lighting (09-28): thin ice-blue light lines along the dash face, the door trim and
+     the console edges, like most new cars at night */
+  const ab = new B(), AC = [0.3, 0.55, 1.0], AE = 1.1;
+  const soft = [];   /* each line also gets a wider, dim band round it, so it reads as a glow */
+  ab.box(0.528, 0.885, -0.27, 0.006, 0.008, 1.05, AC, AE);                  /* across the dash, passenger side of the stack */
+  ab.box(0.528, 0.885, 0.6, 0.006, 0.008, 0.2, AC, AE);                     /* and beyond the wheel, toward the door */
+  ab.box(0.53, 0.885, -0.27, 0.004, 0.045, 1.05, AC, 0.22); ab.box(0.53, 0.885, 0.6, 0.004, 0.045, 0.2, AC, 0.22);
+  ab.box(0.12, 0.93, 0.744, 0.95, 0.008, 0.006, AC, AE);                    /* the driver's door */
+  ab.box(0.12, 0.93, -0.744, 0.95, 0.008, 0.006, AC, AE);                   /* the passenger's door */
+  ab.box(0.12, 0.93, 0.746, 0.95, 0.05, 0.004, AC, 0.25); ab.box(0.12, 0.93, -0.746, 0.95, 0.05, 0.004, AC, 0.25);
+  for (const z of [-0.125, 0.085]) ab.box(0.25, 0.585, z, 0.78, 0.008, 0.008, AC, AE);   /* console edges */
+  ab.box(0.52, 0.64, -0.02, 0.006, 0.006, 0.2, AC, AE * 0.8);               /* under the stack */
+  car.add(onLayer1(new THREE.Mesh(ab.geo(), cabMat)));
   /* nav */
   cabQuad(cabTexMat(navTex, 0.7), 0.508, 0.845, -0.02, 0.25, 0.15, 10 * D2R, 0);
   /* round vents with red rings: driver's side by the door, both ends of the dash, and two
@@ -1859,7 +1933,7 @@ const sideMirrors = [1, -1].map(s => {            /* +z is the right (driver's) 
   const c = new THREE.PerspectiveCamera(SIDE_FOV, 2, 0.3, 3000);
   c.rotation.order = 'YXZ'; c.position.set(0.80, 1.03, s * 0.97); c.rotation.set(-1.5 * D2R, Math.PI / 2 + s * 0.21, 0); car.add(c);
   const grp = new THREE.Group(); grp.position.set(0.80, 1.02, s * 0.97); grp.rotation.y = s > 0 ? -0.45 : 0.6; car.add(grp);   /* on the front corner of the door: the driver's one sits at the right edge of the view */
-  const hb = new B(), HC = [0.16, 0.165, 0.18], RIM = [0.62, 0.63, 0.66];
+  const hb = new B(), HC = [0.6, 0.05, 0.04], RIM = [0.62, 0.63, 0.66];
   hb.box(0.01, 0, 0, 0.11, 0.15, 0.28, HC);
   hb.box(0.02, -0.035, -s * 0.16, 0.09, 0.05, 0.12, HC);   /* the stalk into the door */
   /* a bright rim round the glass, so the mirror's outline reads against the dark */
@@ -2095,17 +2169,45 @@ function truckGeo(paint){
   return b.geo();
 }
 const CAR_GEOS = PAINT.map(carGeo), TRUCK_GEOS = [truckGeo([0.2, 0.3, 0.5]), truckGeo([0.7, 0.7, 0.68])];
+/* a double-decker highway bus (09-28, after the user's photos): white, a blue skirt and a pink
+   band, a blue swoosh up the side, two decks of dark glass, three axles, the orange LED
+   destination board front and back */
+function busGeo(){
+  const b = new B(), L = 12, W = 2.5, WHITE = [0.88, 0.88, 0.86], BLUE = [0.1, 0.2, 0.58], PINK = [0.86, 0.42, 0.52], GLASS = [0.04, 0.045, 0.055];
+  b.box(0, 2.2, 0, L, 3.4, W, WHITE);
+  b.box(0, 0.72, 0, L + 0.02, 0.45, W + 0.02, BLUE);
+  b.box(0, 1.08, 0, L + 0.02, 0.2, W + 0.02, PINK);
+  for (const s of [-1, 1]){
+    const z = s * (W / 2 + 0.012);
+    b.box(-0.6, 1.8, z, 9.4, 0.62, 0.02, GLASS);                                  /* lower deck windows */
+    b.box(-0.4, 2.95, z, 10.6, 0.78, 0.02, GLASS);                                /* upper deck windows */
+    b.box(-1.5, 1.55, z, 4.6, 0.3, 0.025, BLUE, 0, 1, 0, 0.3);                    /* the swoosh */
+    b.box(1.2, 2.35, z, 2.4, 0.22, 0.025, [0.2, 0.45, 0.85], 0, 1, 0, 0.3);
+  }
+  b.box(L / 2 + 0.01, 2.35, 0, 0.03, 2.3, 2.3, GLASS);                            /* big windscreen, both decks */
+  b.box(L / 2 + 0.02, 3.65, 0, 0.03, 0.22, 1.2, [1.0, 0.55, 0.1], 1.6);           /* destination board */
+  b.box(-L / 2 - 0.02, 3.62, 0, 0.03, 0.22, 1.1, [1.0, 0.55, 0.1], 1.4);
+  b.box(-L / 2 - 0.02, 2.55, 0, 0.03, 0.6, 1.6, [0.2, 0.35, 0.7]);                /* the fare panel on the back */
+  for (const x of [4.3, -2.7, -4.0]) for (const z of [1.08, -1.08]) b.box(x, 0.5, z, 1.0, 1.0, 0.36, [0.03, 0.03, 0.035]);
+  for (const z of [0.95, -0.95]){
+    b.box(-L / 2 - 0.02, 1.25, z, 0.05, 0.22, 0.3, [1, 0.1, 0.07], 1.6);
+    b.box(-L / 2 - 0.02, 3.3, z * 0.7, 0.05, 0.1, 0.2, [1, 0.1, 0.07], 1.3);      /* high-mounted */
+    b.box(L / 2 + 0.03, 0.85, z, 0.05, 0.16, 0.4, [1, 0.96, 0.86], 1.5);
+  }
+  return b.geo();
+}
+const BUS_GEO = busGeo();
 const traffic = [];
-function addCar(onc, truck, k){
-  const mesh = new THREE.Mesh(truck ? TRUCK_GEOS[k % 2] : CAR_GEOS[k % CAR_GEOS.length], worldMat);
+function addCar(onc, truck, k, bus = false){
+  const mesh = new THREE.Mesh(bus ? BUS_GEO : truck ? TRUCK_GEOS[k % 2] : CAR_GEOS[k % CAR_GEOS.length], worldMat);
   scene.add(mesh);
-  const c = { mesh, onc, truck, hl: truck ? 5.5 : 2.25, hw: truck ? 1.23 : 0.89, x: 0, z: 0, lane: 1, v: 25, vPref: 25,
+  const c = { mesh, onc, truck, bus, hl: bus ? 6.0 : truck ? 5.5 : 2.25, hw: truck ? 1.25 : 0.89, x: 0, z: 0, lane: 1, v: 25, vPref: 25,
               lc: 0, tgt: 1, ph: 0, ind: 0, timer: 10 + Math.random()*20, th: 0 };
   c.hl0 = c.hl; traffic.push(c); return c;
 }
-for (let i = 0; i < 9; i++) addCar(false, i === 2 || i === 6, i);
+for (let i = 0; i < 9; i++) addCar(false, i === 2 || i === 6, i, i === 6);   /* i 6: the highway bus */
 for (let i = 0; i < 9; i++) addCar(false, i === 4, i + 3).extra = true;   /* parked off-stage except for anomaly 48's long queue */
-for (let i = 0; i < 7; i++) addCar(true, i === 3, i + 2);
+for (let i = 0; i < 7; i++) addCar(true, i === 3 || i === 5, i + 2, i === 5);   /* and one coming the other way */
 const follower = new THREE.Mesh(CAR_GEOS[4], worldMat); follower.visible = false; scene.add(follower);
 
 /* stand-ins for anomalies 18 and 19: every car on your side also carries a bicycle (with
@@ -2405,7 +2507,15 @@ const gaya = (() => {
     b.box(0, 1.2, 0, 0.26, 0.4, 0.46, DENIM);                                    /* short denim jacket */
     b.box(0, 1.01, 0, 0.27, 0.05, 0.47, [0.07, 0.1, 0.22]);                      /* its waistband */
     for (const z of [-0.11, 0.11]) b.box(0.132, 1.28, z, 0.012, 0.1, 0.1, [0.07, 0.1, 0.22]);   /* chest pockets */
-    b.box(-0.132, 1.2, 0, 0.012, 0.3, 0.012, [0.16, 0.2, 0.36]);                 /* back seam */
+    /* his back, which is what you see (09-28): the yoke seam across the shoulders, two pleat
+       seams down from it, the waistband tabs, a scarf end hanging behind, back pockets */
+    const SEAM = [0.2, 0.25, 0.42];
+    b.box(-0.132, 1.33, 0, 0.012, 0.014, 0.44, SEAM);
+    for (const z of [-0.1, 0.1]) b.box(-0.132, 1.17, z, 0.012, 0.3, 0.012, SEAM);
+    for (const z of [-0.17, 0.17]) b.box(-0.136, 1.03, z, 0.012, 0.05, 0.06, [0.07, 0.1, 0.22]);
+    b.box(-0.12, 1.3, 0.06, 0.03, 0.26, 0.09, BLACK);                              /* scarf end down his back */
+    for (const z of [-0.1, 0.1]) b.box(-0.121, 0.84, z, 0.012, 0.12, 0.12, [0.26, 0.29, 0.19]);   /* back pockets */
+    b.box(-0.105, 1.36, 0, 0.05, 0.08, 0.44, DENIM);                               /* rounded shoulders */
     for (const s of [-1, 1]) b.box(0, 1.17, s * 0.275, 0.13, 0.42, 0.11, DENIM); /* arms down, hands in pockets */
     b.box(0.02, 1.42, 0, 0.22, 0.1, 0.3, BLACK);                                 /* scarf round the neck */
     b.box(0.13, 1.26, -0.06, 0.035, 0.34, 0.09, BLACK); b.box(0.13, 1.24, 0.05, 0.035, 0.28, 0.08, BLACK);
@@ -2429,12 +2539,14 @@ const gaya = (() => {
     b.box(-0.01, 0.24, 0, 0.22, 0.08, 0.21, BLACK);                               /* cap */
     b.box(-0.075, 0.12, 0, 0.06, 0.17, 0.2, [0.03, 0.028, 0.025]);                /* hair under it, at the back */
     b.box(0.14, 0.21, 0, 0.1, 0.02, 0.19, BLACK);                                 /* its peak */
+    b.box(-0.115, 0.2, 0, 0.012, 0.03, 0.1, [0.12, 0.12, 0.13]);                   /* the cap's back strap */
+    for (const s of [-1, 1]) b.box(0, 0.08, s * 0.097, 0.05, 0.07, 0.02, SKIN);           /* ears */
   }));
   g.add(head);
   g.visible = false; scene.add(g);
   return { g, legs, head };
 })();
-const GW = { z: 0 };
+const GW = { z: 0, x: 0, turnZ: 0, endX: 0, yaw: 0 };
 /* ending 4: six police officers, caps on; the first one walks up to your window */
 function makeOfficer(){
   /* the Tokyo summer uniform: light-blue long-sleeved shirt, navy vest with the badge, black
@@ -2517,9 +2629,10 @@ function dglow(x, y, z, r, g, b, s){ if (dgN >= DG_MAX) return; dgP[dgN*3] = x; 
 
 /* ---------------------------------------------------------------- game state */
 const START_X = ZSIGN_X - SECTION - 200; // a few seconds of road before the "1km" sign (just after the previous merge)
+const START_S = EX_TOLL - 45;            // 09-28: you start on the ramp, a little before its toll gate, and join the main line from there
 /* onExit: off the main line (on the loop, or on the road home). home: the road home was
    earned at this fork. homeLeg: actually on the road home now. */
-const P = { onExit: false, x: START_X, s: 0, d: 0, v: 22, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0,
+const P = { onExit: true, x: START_X, s: START_S, d: 0, v: 14, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0,
             risk: 0, rearHit: false, took: false, count: 0, sections: 0, best: 0, over: false,
             home: false, homeLeg: false, hp: HOME, late: false, ended: false, endT: 0, crashes: 0, mistakes: 0, endingNo: 0 };
 const pose = { x: START_X, y: 0, z: 0, th: 0, pt: 0 };
@@ -3079,7 +3192,8 @@ function startHomeLeg(){
   if (P.crashes > 0 && P.endingNo >= 3) rivers.get(mainSide).visible = true;
   (mainSide ? police.main : police.home).visible = P.endingNo === 4;
   gaya.g.visible = P.endingNo === 1;
-  GW.z = hz + 8; gaya.g.position.set(tx - 4.3, groundY(GW.z), GW.z); gaya.g.rotation.y = Math.PI / 2;   /* facing down the street, away from you */
+  Object.assign(GW, { z: hz - 3, x: tx - 4.3, turnZ: hz - 10, endX: tx - 30, yaw: Math.PI / 2 });
+  gaya.g.position.set(GW.x, groundY(GW.z), GW.z); gaya.g.rotation.y = GW.yaw;   /* past the family, facing on down the street, away from you */
   const spots = [[4.4, 1.2], [4.7, -3.0], [-0.3, -9.5], [3.2, -8.0], [-3.8, 2.5], [-4.2, -6.5]];
   officers.forEach((o, i) => {
     const x = tx + spots[i][0], z = hz + spots[i][1];
@@ -3153,7 +3267,7 @@ function continueRun(){
   rollAnomaly();
 }
 function resetRun(){
-  Object.assign(P, { onExit: false, x: START_X, s: 0, d: 0, v: 22, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0, risk: 0, rearHit: false,
+  Object.assign(P, { onExit: true, x: START_X, s: START_S, d: 0, v: 14, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0, risk: 0, rearHit: false,
                      took: false, count: 0, sections: 0, over: false, home: false, homeLeg: false, hp: HOME, late: false, ended: false, endT: 0,
                      crashes: 0, mistakes: 0, endingNo: 0 });
   for (const m of [rivers.home, rivers.main, police.home, police.main, gaya.g, ...officers.map(o => o.g)]) if (m) m.visible = false;
@@ -3503,14 +3617,21 @@ function sync(){
   }
   /* the endings' people turn to watch you; in ending 4 one officer walks to your window */
   const face = o => { o.g.rotation.y = -Math.atan2(camW.z - o.g.position.z, camW.x - o.g.position.x); };
+  if (family.wife.g.visible){ face(family.wife); face(family.kid); }   /* waving at you, the driver (09-28) */
   if (gaya.g.visible){
-    const HPg = P.hp, hzg = HPg.streetZ1 + 14, walking = P.s > HPg.L - 90 && GW.z > hzg - 22;
-    if (walking) GW.z -= 0.85 * ldt;
+    /* down the street, then left into the side street and away between the walls, gone */
+    const walking = P.s > P.hp.L - 150 && GW.x > GW.endX, st = 1.1 * ldt;
+    if (walking){
+      if (GW.z > GW.turnZ) GW.z = Math.max(GW.turnZ, GW.z - st);
+      else GW.x -= st;
+      const want = GW.z > GW.turnZ + 0.05 ? Math.PI / 2 : Math.PI;
+      GW.yaw += clamp(want - GW.yaw, -1.6 * ldt, 1.6 * ldt);
+    }
+    if (GW.x <= GW.endX) gaya.g.visible = false;
     const sw = walking ? Math.sin(nowT * 5.3) : 0, gz = gaya.g.position;
-    gz.z = GW.z; gz.y = groundY(GW.z) + (walking ? Math.abs(Math.cos(nowT * 5.3)) * 0.02 : 0);
+    gz.set(GW.x, groundY(GW.z) + (walking ? Math.abs(Math.cos(nowT * 5.3)) * 0.02 : 0), GW.z); gaya.g.rotation.y = GW.yaw;
     gaya.legs[0].rotation.z = 0.32 * sw; gaya.legs[1].rotation.z = -0.32 * sw;
-    const fam = family.wife.g.position, want = -Math.atan2(fam.z - gz.z, fam.x - gz.x) - gaya.g.rotation.y;
-    gaya.head.rotation.y = clamp(Math.atan2(Math.sin(want), Math.cos(want)), -1.6, 1.6);   /* looking back at the family */
+    gaya.head.rotation.y = GW.z > GW.turnZ + 0.05 ? -1.45 : 0;   /* side-on to you down the street; eyes front once he turns off */
   }
   if (officers[0].g.visible){
     const pr = clamp((P.endT - 0.6) / 3.0, 0, 1), o = officers[0], moving = pr > 0 && pr < 1, sw = moving ? Math.sin(nowT * 7) : 0;
@@ -3607,6 +3728,7 @@ function sync(){
   for (const [o, id] of [[manyExits, 43], [peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
   orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
   for (const m of orbCams) m.visible = !orbSitters.visible;
+  updateGates(sdt);
   if (KT.on){
     const k = KT.fade * KT.fade * (3 - 2 * KT.fade); KHIDE.value = 1 - k;
     komatta.position.set(KT.x, 0, KT.z); carLampGlows(KT.x, 0, KT.z, 0, 5.5, true, anomaly === 47 ? 2 : 0, (clock * 1.4 + 0.3) % 1 < 0.5, k, k);
@@ -3657,7 +3779,7 @@ function sync(){
   /* the cabin is lit by whatever lamp you are under, by the car behind, and red when it ends */
   sampleLM(pose.x, pose.z, lmS);
   if (!P.onExit && P.x > TUN_A && P.x < TUN_B){ lmS[0] *= tunK; lmS[1] *= tunK; lmS[2] *= tunK; }
-  let r = 0.06 + lmS[0]*0.42, g = 0.065 + lmS[1]*0.42, b = 0.08 + lmS[2]*0.42;
+  let r = 0.085 + lmS[0]*0.42, g = 0.095 + lmS[1]*0.42, b = 0.125 + lmS[2]*0.42;   /* a little cool fill from the ambient lights (09-28) */
   if (followerOn){ const k = Math.pow(clamp(1 - (followerDist - 5) / 35, 0, 1), 2) * 0.9 * flash; r += k; g += k*0.97; b += k*0.9; }
   if (DAWN.k > 0){ const t = P.late ? 0.45 : 0.78; r = lerp(r, t, DAWN.k); g = lerp(g, t, DAWN.k); b = lerp(b, t + 0.03, DAWN.k); }
   if (P.dead){ const k = Math.min(1, P.deadT * 4); r = lerp(r, 1.1, k); g = lerp(g, 0.12, k); b = lerp(b, 0.08, k); }
@@ -3822,6 +3944,17 @@ function sndKnock(){
 }
 /* anomaly 42: the speed camera's shutter - a sharp electronic click and the whine of the strobe
    recharging, quieter the further off it is */
+/* the ETC gate's navi chime: one soft 「ポーン」 */
+function sndGate(){
+  const S = SND; if (!S.ctx) return;
+  const ctx = S.ctx, t = ctx.currentTime + 0.01, out = S.G(0.5); out.connect(S.master);
+  for (const [f, k] of [[1046.5, 1], [2093, 0.25], [3139.5, 0.08]]){
+    const o = ctx.createOscillator(), g = S.G(0); o.type = 'sine'; o.frequency.value = f;
+    o.connect(g); g.connect(out);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.32 * k, t + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+    o.start(t); o.stop(t + 1.35);
+  }
+}
 function sndShutter(vol){
   const S = SND; if (!S.ctx || vol <= 0.01) return;
   const ctx = S.ctx, t = ctx.currentTime + 0.005, out = S.G(vol); out.connect(S.master);
@@ -3977,6 +4110,13 @@ function goFull(){
 }
 const paintFs = () => { fsBtn.hidden = !(fsAPI && (isMobile || navigator.maxTouchPoints > 0) && running && !fsOn()); };
 fsBtn.addEventListener('click', () => { goFull(); });
+/* iPhone / iPad (all browsers there are Safari underneath): point at Add to Home Screen, unless
+   already opened from there */
+{
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const homeApp = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  $('iosTip').hidden = !(ios && !homeApp);
+}
 document.addEventListener('fullscreenchange', paintFs); document.addEventListener('webkitfullscreenchange', paintFs);
 function begin(){
   if (isMobile || navigator.maxTouchPoints > 0) goFull();
@@ -3991,7 +4131,7 @@ function begin(){
 startBtn.addEventListener('click', begin);
 
 /* ---------------------------------------------------------------- debug modes */
-/* Hidden: tap the title five times (or open the page with #debug / ?debug). */
+/* Hidden: see the unlock sequence further down. */
 const DBG = { mode: null, idx: 0 };
 const dbgEl = $('dbg'), dbgHudEl = $('dbgHud'), dbgTxt = $('dbgTxt');
 function dbgHud(){
@@ -4040,9 +4180,28 @@ $('dbgPrev').addEventListener('click', () => dbgJump(-1));
 $('dbgNext').addEventListener('click', () => dbgJump(1));
 addEventListener('keydown', e => { if (DBG.mode === 'all' && !e.repeat){ if (e.code === 'KeyN') dbgJump(1); if (e.code === 'KeyB') dbgJump(-1); } });
 {
-  let taps = 0, tapT = 0;
-  $('ttl').addEventListener('click', () => { const t = performance.now(); taps = t - tapT < 1500 ? taps + 1 : 1; tapT = t; if (taps >= 5) dbgEl.hidden = false; });
-  if (/debug/.test(location.hash + location.search)) dbgEl.hidden = false;
+  /* harder still (09-28): tap the title 3 times quickly, then within 4 s tap the line
+     「エンディングは全部で4つ。」 4 times, then within 5 s press and hold the title for 3 s.
+     Any slip starts it over. Or open the page with #nd8dbg. */
+  const ttl = $('ttl'), endLine = $('endLine');
+  const D = { stage: 0, n: 0, lastT: 0, stageT: 0, hold: 0 };
+  const reset = () => { D.stage = 0; D.n = 0; };
+  ttl.addEventListener('click', () => {
+    const t = performance.now();
+    if (D.stage === 0 || D.stage === 1){ D.n = t - D.lastT < 600 && D.stage === 0 ? D.n + 1 : 1; D.stage = 0; D.lastT = t; if (D.n === 3){ D.stage = 1; D.stageT = t; D.n = 0; } }
+  });
+  endLine.addEventListener('click', () => {
+    const t = performance.now();
+    if (D.stage !== 1 || t - D.stageT > 4000){ reset(); return; }
+    if (++D.n >= 4){ D.stage = 2; D.stageT = t; D.n = 0; }
+  });
+  const cancel = () => { clearTimeout(D.hold); D.hold = 0; };
+  ttl.addEventListener('pointerdown', () => {
+    if (D.stage === 2 && performance.now() - D.stageT < 5000) D.hold = setTimeout(() => { dbgEl.hidden = false; reset(); }, 3000);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) ttl.addEventListener(ev, cancel);
+  ttl.addEventListener('contextmenu', e => e.preventDefault());
+  if (location.hash === '#nd8dbg') dbgEl.hidden = false;
 }
 /* game over -> タイトルに戻る: everything reset, back at the title (same as after an ending) */
 $('retry').addEventListener('click', () => $('again').click());
