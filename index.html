@@ -283,6 +283,7 @@ const SECTION = HM_FORK + 96;
 /* the "N番出口 1km" sign itself stands right after the merge (the zone's layout still counts
    from SIGN_X) */
 const ZSIGN_X = MERGE_END + 6;          // wrap after that; the next sign follows at once
+const TOLL_M = HM_A - 15;              // the main-line toll plaza, main-line ending only: just before the way home peels off (09-28)
 const BORE_R = 7.8, BORE_C0 = 0.0, BORE_C1 = 18.2;
 const MEDIAN_Z = 9.2;
 const LANES = [-3.5, 0, 3.5];
@@ -437,6 +438,7 @@ const HOME_M = (() => {
   for (let i = 0; i <= 180; i++){ const t = i/180; raw.push([HM_FORK + 45*t, DECEL_C + (DIV_Z - DECEL_C)*sm(t), 0]); }
   return homeTail(raw, HM_FORK + 45, DIV_Z, 22);
 })();
+HOME_M.tollS = -9999;                  // (09-28) the main-line way home has had its toll plaza already, on the main line
 const homePose = (s, d, o) => pathPose(HOME, s, d, o);
 const BARRICADE_S = 24;                // where the closed road is fenced off
 const EX_TOLL = 190;                   // the ramp's one toll gate, about halfway round (09-28)
@@ -846,7 +848,7 @@ function drawToll(){
   };
   plate(0, '#35307a', 'ETC専用'); plate(512, '#0d6a3f', '一　般');
   /* the ramp gates' name boards */
-  for (const [y0, big, small] of [[640, '出口料金所', 'EXIT TOLL GATE'], [832, '入口料金所', 'ENTRANCE TOLL GATE']]){
+  for (const [y0, big, small] of [[640, '出口料金所', 'EXIT TOLL GATE'], [832, '本線料金所', 'MAIN TOLL GATE']]){
     g.save(); g.translate(0, y0); signPlate(g, 1024, 192); g.restore();
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = `700 92px ${SIGNFONT}`; g.fillText(big, 512, y0 + 76);
@@ -1346,7 +1348,7 @@ function buildSection(){
     { /* that side street: a narrow lane off to the left between the houses */
       const az = HOUSE_Z - 10, gy2 = groundY(az) + 0.16, ba = Wb(tx - 20);
       ba.quad([tx - 3.0, gy2, az - 1.8], [tx - 45, gy2, az - 1.8], [tx - 45, gy2, az + 1.8], [tx - 3.0, gy2, az + 1.8], COL.asphalt);
-      for (const s2 of [-1, 1]) ba.box(tx - 24, groundY(az) + 0.8, az + s2 * 2.4, 40, 1.6, 0.2, [0.52, 0.51, 0.47]);   /* block walls either side */
+      for (const s2 of [-1, 1]) ba.box(tx - 27, groundY(az) + 0.8, az + s2 * 2.4, 40, 1.6, 0.2, [0.52, 0.51, 0.47]);   /* block walls either side, set back from the street corner so he can walk past (09-28) */
       for (const [hx, dz2] of [[-13, -7.5], [-13, 7.5], [-30, -7.5], [-30, 7.5]]) ba.box(tx + hx, groundY(az) + 2.8, az + dz2, 8, 5.6, 9, [0.5, 0.48, 0.44]);
     }
     for (let z = zA - 20; z > zB; z -= 34){
@@ -1361,7 +1363,7 @@ function buildSection(){
       b.box(tx, gy + h + rise/2, zc - dep/4, run, 0.2, 16.8, ROOF, 0, 1, Math.PI/2, p);
       b.box(tx, gy + h + rise/2, zc + dep/4, run, 0.2, 16.8, ROOF, 0, 1, Math.PI/2, -p);
       for (const wy of [1.6, 4.2]) for (const wx of [-5, -1.6, 1.8, 5.2]){
-        const lit = hr() < 0.5;
+        const lit = hr() < 0 && false;   /* 09-28: the house at the end of the street stays dark */
         b.box(tx + wx, gy + wy, zc + dep/2 + 0.03, 1.3, 1.0, 0.06, lit ? WARM : DARKGLASS, lit ? 1.2 : 0);
       }
       for (const s of [-1, 1]) b.box(tx + s * 12, gy + 0.6, zc + 5, 8, 1.2, 0.3, [0.2, 0.3, 0.16]);   /* hedges either side */
@@ -1414,8 +1416,8 @@ function buildSection(){
   g.add(new THREE.Mesh(tunPlate.geo(), new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: tunTex } }),
     defines: { ND_MAP: '', ND_NOWARP: '' }, vertexShader: WORLD_VS, fragmentShader: WORLD_FS, side: THREE.DoubleSide })));
   g.add(new THREE.Mesh(tunPanels.geo(), mapMat(tunWallTex)));
-  g.add(new THREE.Mesh(signZone.geo(), new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: zoneTex }, uFogK: { value: 0.3 } }),
-    defines: { ND_MAP: '', ND_FOGK: '' }, vertexShader: WORLD_VS, fragmentShader: WORLD_FS, side: THREE.DoubleSide })));
+  g.add(Object.assign(new THREE.Mesh(signZone.geo(), new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: zoneTex }, uFogK: { value: 0.3 } }),
+    defines: { ND_MAP: '', ND_FOGK: '' }, vertexShader: WORLD_VS, fragmentShader: WORLD_FS, side: THREE.DoubleSide })), { name: 'zoneSign' }));
   const pointsGeo = A => {
     const n = A.length / 7, gp = new Float32Array(n*3), gc = new Float32Array(n*3), gs = new Float32Array(n);
     for (let i = 0; i < n; i++){ gp.set(A.slice(i*7, i*7 + 3), i*3); gc.set(A.slice(i*7 + 3, i*7 + 6), i*3); gs[i] = A[i*7 + 6]; }
@@ -1496,7 +1498,7 @@ const GATES = (() => {
   };
   return [
     mk(EX, EX_TOLL + 2, 2.6, 5.1),
-    mk(HOME, HOME.tollS + 2, 2.85, 5.6), mk(HOME_M, HOME_M.tollS + 2, 2.85, 5.6),
+    mk(HOME, HOME.tollS + 2, 2.85, 5.6),
   ];
 })();
 function updateGates(dt){
@@ -1510,8 +1512,55 @@ function updateGates(dt){
     if (G.HP === EX) G.g.position.x = G.x0 + SECTION * Math.round((pose.x - G.x0) / SECTION);
   }
 }
+/* main-line ending (09-28): when staying on the main line was the right answer at 8番出口, a toll
+   plaza stands right across the main line a little past the fork - booths between the lanes, a
+   boom in each lane - and there is no 「N番出口」 sign after it. You go through in your own lane,
+   and only then does the car ease over onto the way home. Built once, shown only then. */
+const mainToll = (() => {
+  const g = new THREE.Group(), b = new B(), tb = new B(), X = TOLL_M;
+  for (const z of [-5.25, -1.75, 1.75, 5.25]){
+    b.box(X, 0.13, z, 14, 0.26, 0.5, [0.62, 0.62, 0.6]);
+    b.box(X - 7.2, 0.55, z, 0.4, 1.1, 0.48, [0.95, 0.72, 0.08], 0.15); b.box(X - 7.2, 0.55, z, 0.42, 0.22, 0.5, [0.05, 0.05, 0.05]);
+    b.box(X - 5, 1.3, z, 0.15, 2.0, 0.3, [0.95, 0.45, 0.08], 0.6);
+    for (const dx of [-3, 3]) b.box(X + dx, 2.8, z, 0.3, 5.6, 0.3, [0.42, 0.42, 0.44]);
+    if (z > -5){ b.box(X + 0.5, 1.45, z, 2.8, 2.4, 0.42, [0.82, 0.83, 0.8]); b.box(X + 0.5, 1.75, z, 2.2, 0.8, 0.46, [0.75, 0.85, 0.95], 0.9); }
+  }
+  b.box(X, 5.9, 0, 8, 0.7, 13.4, [0.36, 0.36, 0.38]); b.box(X, 5.52, 0, 7.4, 0.06, 12.8, [0.9, 0.93, 1.0], 0.5);
+  for (const z of [-3.5, 0, 3.5]) b.box(X - 4.05, 5.2, z + 0.9, 0.2, 0.2, 0.4, [0.2, 1.0, 0.45], 2.2);
+  const fs = X - 4.06, v1 = 1 - 832/1024;
+  tb.quad([fs, 5.52, -2.1], [fs, 5.52, 2.1], [fs, 6.3, 2.1], [fs, 6.3, -2.1], [1, 1, 1], 0.45, 1, [0, 0, 1, 0, 1, v1, 0, v1]);
+  g.add(new THREE.Mesh(b.geo(), worldMat), new THREE.Mesh(tb.geo(), mapMat(tollTex)));
+  const bars = [-3.5, 0, 3.5].map(lz => {
+    const piv = new THREE.Group(), arm = new THREE.Group(), ab = new B();
+    piv.position.set(X + 2, 0, lz + 1.5); piv.rotation.y = Math.PI / 2; arm.position.y = 0.92;
+    for (let x = 0.1, k = 0; x < 3.0; x += 0.5, k++) ab.box(x + 0.25, 0, 0, 0.5, 0.09, 0.07, k % 2 ? [0.95, 0.95, 0.93] : [0.85, 0.08, 0.06], 0.18);
+    arm.add(new THREE.Mesh(ab.geo(), worldMat)); piv.add(arm); g.add(piv);
+    return { lz, arm, a: 0, open: false };
+  });
+  g.visible = false; scene.add(g);
+  return { g, bars };
+})();
+const zoneSigns = [];
+function nearTollM(x){ return TOLL_M + SECTION * Math.round((x - TOLL_M) / SECTION); }
+function updateMainToll(dt){
+  const on = P.home === 'main' && !P.homeLeg;
+  mainToll.g.visible = on;
+  for (const m of zoneSigns) m.visible = P.home !== 'main';
+  if (!on) return;
+  const X = nearTollM(pose.x); mainToll.g.position.x = X - TOLL_M;
+  for (const bar of mainToll.bars){
+    const near = (x, z) => Math.abs(z - bar.lz) < 1.6 && x - (X + 2) > -16 && x - (X + 2) < 9;
+    const mine = !P.onExit && near(P.x, P.d);
+    let want = mine;
+    for (const c of traffic) if (!c.onc && !c.parked && near(c.x, c.z)) want = true;
+    if (mine && !bar.mine) sndGate();
+    bar.mine = mine; bar.open = want;
+    bar.a += clamp((want ? 1.45 : 0) - bar.a, -1.6 * dt, 3.2 * dt);
+    bar.arm.rotation.z = bar.a;
+  }
+}
 const orbCams = [];
-scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); });
+scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); if (o.name === 'zoneSign') zoneSigns.push(o); });
 /* pristine copies, so each new section can start from a clean slate */
 const ORIG = {
   poleP: SEC.poles.attributes.position.array.slice(),
@@ -1680,7 +1729,7 @@ const mirrorPivot = new THREE.Group(); mirrorPivot.position.set(0.385, 1.38, 0.1
     const a = Math.abs(u), t = v / HL;
     let h = -v * 0.07 - 0.16 * t ** 4;
     h += 0.06 * (1 - (a / HW) ** 2);
-    h += 0.1 * Math.exp(-(((a - 0.72) / 0.11) ** 2)) * (0.6 + 0.4 * Math.sin(Math.PI * Math.min(1, t * 1.4)));
+    h += 0.04 * Math.exp(-(((a - 0.72) / 0.11) ** 2)) * (0.6 + 0.4 * Math.sin(Math.PI * Math.min(1, t * 1.4)));
     if (a > 0.8) h -= 0.3 * ((a - 0.8) / 0.15) ** 2;
     return h;
   };
@@ -1707,9 +1756,9 @@ const wheelSpin = new THREE.Group(), stdWheel = new THREE.Group(), helm = new TH
     geo.setAttribute('aCol', new THREE.BufferAttribute(c, 3)); geo.setAttribute('aEmi', new THREE.BufferAttribute(e, 1)); return geo; };
   const holder = new THREE.Group(); holder.position.set(0.40, 0.88, 0.35);
   holder.lookAt(0.40 - Math.cos(30*D2R), 0.88 + Math.sin(30*D2R), 0.35);
-  const rim = [0.08, 0.08, 0.085];
+  const rim = [0.03, 0.03, 0.034], spokeC = [0.3, 0.31, 0.34];   /* 09-28: a blacker rim and silver spokes, so the wheel stands off the dash */
   stdWheel.add(onLayer1(new THREE.Mesh(attrs(new THREE.TorusGeometry(0.185, 0.017, 8, 40), rim), cabMat)));
-  for (const a of [0, 150, 210]){ const sp = onLayer1(new THREE.Mesh(attrs(new THREE.BoxGeometry(0.17, 0.028, 0.02), rim), cabMat));
+  for (const a of [0, 150, 210]){ const sp = onLayer1(new THREE.Mesh(attrs(new THREE.BoxGeometry(0.17, 0.028, 0.02), spokeC), cabMat));
     sp.rotation.z = (a - 90)*D2R; sp.position.set(Math.cos((a - 90)*D2R)*0.085, Math.sin((a - 90)*D2R)*0.085, 0); stdWheel.add(sp); }
   stdWheel.add(onLayer1(new THREE.Mesh(attrs(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 16).rotateX(Math.PI/2), [0.12, 0.12, 0.13]), cabMat)));
   /* anomaly: a ship's wheel in its place - wooden rim, eight spokes with turned handles */
@@ -2798,7 +2847,7 @@ function updateTraffic(dt){
     if (c.lc === 0){
       c.timer -= dt * (noInd ? 3 : 1);        /* anomaly 29: they change lanes more, so you see it */
       const blocked = gap < 50 && lv < c.vPref - 2.5;
-      if ((blocked || c.timer <= 0) && !c.truck && !c.stand && !c.line){
+      if ((blocked || c.timer <= 0) && !c.truck && !c.stand && !c.line && !(P.home === 'main' && Math.abs(c.x - nearTollM(c.x)) < 45)){
         const first = Math.random() < 0.5 ? -1 : 1;
         for (const dir of [first, -first]){
           const tl = c.lane + dir;
@@ -2892,7 +2941,7 @@ const ANOMALIES = {
   42: 'オービスのカメラの代わりにスマホを持った人が座って、車が通るたびに撮影している',
   43: 'トンネルの非常口がやたらたくさんある',
   44: 'トンネル手前の看板の「ラジオ」が「オジヤ」になっている',
-  49: '白線の太さが半分になっている',
+  49: '白線がすごく細くなっている',
   50: '運転手の手がゾンビの手になっている',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
@@ -3027,7 +3076,7 @@ function applyAnomaly(){
   if (anomaly === 5) tiltLamp(pickLamp(), 16 * D2R);
   if (anomaly === 28) yLamps(12 * D2R);
   if (anomaly === 30) shortDashes(0.5);
-  if (anomaly === 49) thinLines(0.5);
+  if (anomaly === 49) thinLines(0.2);   /* a fifth of the width (09-28: half was not enough) */
   if (anomaly === 27){ const a = SEC.median.attributes.position.array; for (let i = 1; i < a.length; i += 3) a[i] *= 0.5; }   /* the wall stands on y = 0 */
   if (anomaly === 8){ const a = SEC.edges.attributes.aCol.array; for (let i = 0; i < a.length; i += 3){ a[i] = 0.95; a[i+1] = 0.74; a[i+2] = 0.0; } }
   if (anomaly === 9) placePeople(32);   /* the instanced mesh holds 64 = 32 people in two copies */
@@ -3192,7 +3241,7 @@ function startHomeLeg(){
   if (P.crashes > 0 && P.endingNo >= 3) rivers.get(mainSide).visible = true;
   (mainSide ? police.main : police.home).visible = P.endingNo === 4;
   gaya.g.visible = P.endingNo === 1;
-  Object.assign(GW, { z: hz - 3, x: tx - 4.3, turnZ: hz - 10, endX: tx - 30, yaw: Math.PI / 2 });
+  Object.assign(GW, { z: hz - 3, x: tx - 3.7, turnZ: hz - 10, endX: tx - 30, yaw: Math.PI / 2 });
   gaya.g.position.set(GW.x, groundY(GW.z), GW.z); gaya.g.rotation.y = GW.yaw;   /* past the family, facing on down the street, away from you */
   const spots = [[4.4, 1.2], [4.7, -3.0], [-0.3, -9.5], [3.2, -8.0], [-3.8, 2.5], [-4.2, -6.5]];
   officers.forEach((o, i) => {
@@ -3200,11 +3249,14 @@ function startHomeLeg(){
     o.g.position.set(x, groundY(z) + (Math.abs(spots[i][0]) < 3.1 ? 0.15 : 0), z);
     o.g.visible = P.endingNo === 4;
   });
-  Object.assign(WALK, { sx: tx + 4.4, sz: hz + 1.2, tx: tx + 2.1, tz: hz + 4.65 });   /* at the driver's window, in view as you turn */
+  /* at the driver's window, in view as you turn - taken from where the car now stops (09-28: it
+     stops 2.5 m further on than it did, and he was left knocking behind you) */
+  const stopW = pathPose(HP, HP.L - 16.5, 0, {});
+  Object.assign(WALK, { sx: tx + 4.4, sz: stopW.z - 4.5, tx: stopW.x + 2.1, tz: stopW.z - 0.6 });
   KNOCK.last = 0;
   /* at the gate, both inside the view once you have turned to look, facing the car and waving */
-  family.wife.g.position.set(tx + 4.5, gy, hz + 3.0); family.kid.g.position.set(tx + 4.1, gy, hz + 4.6);
-  const stop = pathPose(HP, HP.L - 19, 0, {});
+  family.wife.g.position.set(tx + 4.5, gy, hz + 3.0); family.kid.g.position.set(tx + 4.3, gy, hz + 3.75);   /* mother and child side by side */
+  const stop = pathPose(HP, HP.L - 16.5, 0, {});
   for (const p of [family.wife, family.kid]) p.g.rotation.y = -Math.atan2(stop.z - p.g.position.z, stop.x - p.g.position.x);
   family.wife.g.visible = family.kid.g.visible = P.endingNo === 1;
   homeLights.lit.visible = homeLights.glow.visible = !P.late; homeLights.dark.visible = P.late;
@@ -3308,10 +3360,40 @@ function step(dt){
   /* staying on the main line was the right answer at 8番出口: the car eases over to the left and
      into the opened lane by itself, so the way home cannot be missed (it used to be up to you,
      and going straight on meant another lap) */
-  if (P.home === 'main' && !P.onExit && P.x > FORK + 20 && P.x < HM_FORK){
+  if (P.home === 'main' && !P.onExit && P.x > FORK && P.x < TOLL_M + 10){
+    const lc = LANES.reduce((a, b) => Math.abs(b - P.d) < Math.abs(a - P.d) ? b : a);
+    if (P.x > TOLL_M - 45) P.d += (lc - P.d) * Math.min(1, dt * 1.6);   /* line up with your booth */
+    if (Math.abs(P.x - TOLL_M) < 9) P.d = clamp(P.d, lc - 0.55, lc + 0.55);
+  }
+  if (P.home === 'main' && !P.onExit && P.x > TOLL_M + 10 && P.x < HM_FORK){
     const tgt = P.x < HM_A ? -3.5 : -7.2;
-    P.d += (tgt - P.d) * Math.min(1, dt * 0.9);
+    /* (09-28) the other cars make room instead of being driven through: those ahead on your left
+       speed up and move over to the right, those behind drop back; and you only slide across when
+       nothing is alongside on that side */
+    for (const c of traffic){
+      if (c.onc || c.parked || c.z > -1.2) continue;
+      const dx = c.x - P.x;
+      if (Math.abs(dx) > 80) continue;
+      if (dx > -3){
+        c.vPref = Math.max(c.vPref, P.v + 10);
+        if (c.lc === 0 && !c.stand && laneClear(1, c.x, 30, 15, c)){ c.lc = 1; c.tgt = 1; c.ph = 0; c.ind = 1; }
+      } else c.vPref = Math.min(c.vPref, Math.max(8, P.v - 8));
+    }
+    const side = Math.sign(tgt - P.d);
+    /* a car behind on that side counts while it could still close up on you (a bus is 12 m long) */
+    const blocked = traffic.some(c => !c.onc && !c.parked && Math.abs(c.z - P.d) < 2.8 && Math.sign(c.z - P.d) === side &&
+      c.x - P.x < c.hl + 4 && P.x - c.x < c.hl + 6 + Math.max(0, c.v - P.v) * 2);
+    P.v += clamp(13 - P.v, -3 * dt, 0);   /* 09-28: the car slows down by itself once through the toll, as if pulling off */
+    if (!blocked) P.d += (tgt - P.d) * Math.min(1, dt * 0.9);
     P.steer *= 0.5;
+  }
+  if (P.home === 'main' && !P.onExit && P.x > FORK && P.x < HM_FORK){
+    /* and you never run up into the back of one: hold its speed a few metres behind it */
+    for (const c of traffic){
+      if (c.onc || c.parked || Math.abs(c.z - P.d) > 2.2 || c.x < P.x) continue;
+      const gap = c.x - c.hl - (P.x + 2.3);
+      if (gap < 14) P.v = Math.min(P.v, Math.max(0, c.v + (gap - 6) * 0.6));
+    }
   }
   const [lo, hi] = lateralBounds(); P.d = clamp(P.d, lo, hi);
   const ds = P.v * dt;
@@ -3321,7 +3403,7 @@ function step(dt){
     if (P.home === 'exit' && !P.homeLeg && P.s >= EX.loopS0){ P.s -= EX.loopS0; P.homeLeg = true; P.hp = HOME; startHomeLeg(); }
     if (P.homeLeg){
       /* roll up to the gate and stop */
-      const stopAt = P.hp.L - 19;          /* at the house: its front door just ahead on the right (door at L - 16) */
+      const stopAt = P.hp.L - 16.5;   /* 09-28: 2.5 m further on, so the family sits in the side window, clear of the pillar */          /* at the house: its front door just ahead on the right (door at L - 16) */
       if (P.s > stopAt - 70) P.v = Math.min(P.v, Math.max(0, (stopAt - P.s) * 0.45));
       if (P.s >= stopAt){ P.s = stopAt; P.v = 0; }
       /* ending 4 waits for the officer to reach your window */
@@ -3728,7 +3810,7 @@ function sync(){
   for (const [o, id] of [[manyExits, 43], [peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
   orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
   for (const m of orbCams) m.visible = !orbSitters.visible;
-  updateGates(sdt);
+  updateGates(sdt); updateMainToll(sdt);
   if (KT.on){
     const k = KT.fade * KT.fade * (3 - 2 * KT.fade); KHIDE.value = 1 - k;
     komatta.position.set(KT.x, 0, KT.z); carLampGlows(KT.x, 0, KT.z, 0, 5.5, true, anomaly === 47 ? 2 : 0, (clock * 1.4 + 0.3) % 1 < 0.5, k, k);
