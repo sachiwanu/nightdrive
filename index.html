@@ -128,6 +128,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 .home-card h1{margin:6px 0 4px;font:900 clamp(44px,9vw,68px)/1.05 "Zen Kaku Gothic New",system-ui,sans-serif;color:#FFE3BF;}
 .stats.home-stats{grid-template-columns:repeat(2,1fr);}
 .home-card{max-height:calc(100dvh - 32px);overflow:auto;}
+.ver{font-size:.3em;font-weight:700;opacity:.6;margin-left:.45em;letter-spacing:.04em;vertical-align:middle;}
 .over-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .xshare{display:block;width:100%;height:44px;margin-top:10px;border:1px solid rgba(255,255,255,.35);border-radius:10px;background:#000;color:#fff;
   font:700 16px/1 "BIZ UDPGothic",system-ui,sans-serif;letter-spacing:.06em;cursor:pointer;}
@@ -200,7 +201,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 </div>
 <div id="panel">
   <div class="sign intro" role="dialog" aria-labelledby="ttl">
-    <h1 id="ttl">8番インターチェンジ</h1>
+    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
     <p class="rule small" id="endLine">エンディングは全部で5つ。</p>
@@ -209,7 +210,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
       <thead><tr><th></th><th>アクセル</th><th>ブレーキ</th><th>ハンドル</th></tr></thead>
       <tbody>
         <tr class="desk"><th>キーボード</th><td>↑ / W</td><td>↓ / S</td><td>← → / A D</td></tr>
-        <tr class="desk"><th>パッド</th><td>LT / B</td><td>RT / A</td><td>左スティック</td></tr>
+        <tr class="desk"><th>パッド</th><td>RT / B</td><td>LT / A</td><td>左スティック</td></tr>
         <tr class="touch"><th>スマホ</th><td>右下のボタン</td><td>その左</td><td>左下 ◀ ▶</td></tr>
       </tbody>
     </table>
@@ -1562,6 +1563,69 @@ function updateMainToll(dt){
     bar.arm.rotation.z = bar.a;
   }
 }
+/* the box game's monster, after the user's screenshot (09-28): a little black ghost - a round
+   dome of a head flaring into a sheet whose hem falls in soft scallops, two white oval eyes and a
+   sad white frown. About 0.9 m tall. Faces +x. */
+const GHOST_GEO = (() => {
+  const b = new B(), BL = [0.035, 0.035, 0.04], H = 0.92, R = 0.4, NA = 60, NV = 18;
+  const P3 = (a, v) => {
+    let r, y;
+    if (v < 0.42){ const t = v / 0.42; r = R * Math.sin(t * Math.PI / 2); y = H - R * (1 - Math.cos(t * Math.PI / 2)); }
+    else { const t = (v - 0.42) / 0.58; r = R * (1 + 0.16 * t * t); y = (H - R) * (1 - t); }
+    if (v > 0.8){ const k = (v - 0.8) / 0.2; y += k * 0.07 * (1 + Math.cos(6 * a)); r += k * 0.05 * Math.cos(6 * a); }   /* scalloped hem */
+    return [Math.cos(a) * r, Math.max(0, y), Math.sin(a) * r];
+  };
+  for (let i = 0; i < NA; i++) for (let j = 0; j < NV; j++){
+    const a0 = i / NA * Math.PI * 2, a1 = (i + 1) / NA * Math.PI * 2, v0 = j / NV, v1 = (j + 1) / NV;
+    b.quad(P3(a0, v0), P3(a0, v1), P3(a1, v1), P3(a1, v0), BL);
+  }
+  /* the face: flat white shapes laid just proud of the front */
+  const W = [0.95, 0.95, 0.93], fr = (y, z) => { const r = Math.sqrt(Math.max(0, R * R * 1.02 - z * z)); return r + 0.012; };
+  const oval = (y, z, rw, rh) => { const N = 14, x = fr(y, z);
+    for (let k = 0; k < N; k++){ const a0 = k / N * Math.PI * 2, a1 = (k + 1) / N * Math.PI * 2;
+      b.quad([x, y, z], [x, y + Math.sin(a0) * rh, z + Math.cos(a0) * rw], [x, y + Math.sin(a1) * rh, z + Math.cos(a1) * rw], [x, y, z], W, 0.6); } };
+  oval(0.6, -0.1, 0.05, 0.065); oval(0.6, 0.1, 0.05, 0.065);
+  for (let k = 0; k < 10; k++){                                    /* the frown: an arch, thick in the middle */
+    const u0 = -1 + k / 5, u1 = -1 + (k + 1) / 5, z0 = u0 * 0.11, z1 = u1 * 0.11, y0 = 0.44 - 0.05 * u0 * u0, y1 = 0.44 - 0.05 * u1 * u1;
+    const th0 = 0.022 * (1 - 0.5 * Math.abs(u0)), th1 = 0.022 * (1 - 0.5 * Math.abs(u1)), x = fr(0.44, 0) - 0.004;
+    b.quad([x, y0 - th0, z0], [x, y1 - th1, z1], [x, y1 + th1, z1], [x, y0 + th0, z0], W, 0.6);
+  }
+  return b.geo();
+})();
+/* anomaly 51 (09-28): the black monsters from the box game, loose in the tunnel. Knee-high,
+   black, ragged at the edges, two small pale eyes; they get about the way they do there - a
+   quick hop of one metre in one of four directions, a pause, another - each keeping to its own
+   patch of the walkway along the left wall. Moved onto the nearest copy of the tunnel. */
+const monsters = (() => {
+  const g = new THREE.Group(), list = [], rnd = mulberry32(51);
+  for (const [x0, z0] of [[TUN_A + 55, -3.5], [TUN_A + 95, 0], [TUN_A + 140, 3.5]]){   /* 09-28: out on the road now, one to a lane to start with */
+    const m = new THREE.Mesh(GHOST_GEO, worldMat); g.add(m);
+    list.push({ m, x0, z0, x: x0, z: z0, fx: x0, fz: z0, tx: x0, tz: z0, t: 1, pause: rnd() * 0.4, yaw: 0 });
+  }
+  g.visible = false; scene.add(g);
+  return { g, list };
+})();
+function updateMonsters(dt, tunX){
+  const on = anomaly === 51;
+  monsters.g.visible = on; if (!on) return;
+  monsters.g.position.x = tunX;
+  for (const M of monsters.list){
+    if (M.t < 1){
+      M.t = Math.min(1, M.t + dt / 0.18);
+      M.x = M.fx + (M.tx - M.fx) * M.t; M.z = M.fz + (M.tz - M.fz) * M.t;
+      if (M.t >= 1) M.pause = 0.35;
+    } else if ((M.pause -= dt) <= 0){
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => Math.abs(M.x + dx - M.x0) <= 3 && M.z + dz >= -5 && M.z + dz <= 5);
+      const [dx, dz] = dirs[Math.floor(Math.random() * dirs.length)];
+      M.fx = M.x; M.fz = M.z; M.tx = M.x + dx; M.tz = M.z + dz; M.t = 0;
+      M.yaw = -Math.atan2(dz, dx);
+    }
+    M.m.position.set(M.x, Math.sin(Math.PI * Math.min(1, M.t)) * 0.12, M.z);
+    M.m.rotation.y = M.yaw;
+    /* hit one and it is a crash; the other cars go straight through them */
+    if (!P.dead && !P.onExit && !P.home && Math.abs(M.x + tunX - pose.x) < 2.3 + 0.45 && Math.abs(M.z - pose.z) < 0.92 + 0.45) die('衝突した');
+  }
+}
 const orbCams = [];
 scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); if (o.name === 'zoneSign') zoneSigns.push(o); });
 /* pristine copies, so each new section can start from a clean slate */
@@ -1945,6 +2009,43 @@ function updateArms(){
     drawMeter(kmh, anomaly === 16 ? kmh * 10 : kmh);
   }
 }
+/* anomaly 52 (09-28): no car at all - only the wheel and your hands, and your own legs running
+   along the road underneath, the view bobbing with each stride */
+const NOCAR = { list: null, ph: 0, legs: null };
+(function buildRunLegs(){
+  const g = new THREE.Group(), JE = [0.14, 0.2, 0.34], SH = [0.9, 0.9, 0.88], legs = [];
+  g.position.set(0.12, 0.95, 0.35);
+  for (const z of [-0.11, 0.11]){
+    const piv = new THREE.Group(); piv.position.z = z;
+    const b = new B();
+    b.box(0, -0.45, 0, 0.16, 0.9, 0.16, JE);
+    b.box(0.07, -0.92, 0, 0.3, 0.1, 0.13, SH);
+    piv.add(onLayer1(new THREE.Mesh(b.geo(), cabMat))); g.add(piv); legs.push(piv);
+  }
+  g.visible = false; car.add(g);
+  NOCAR.legs = { g, legs };
+})();
+function updateNoCar(dt){
+  const on = anomaly === 52 && inZone();
+  if (!NOCAR.list){
+    const keep = new Set([wheelSpin.parent, cam, mcam, rain, kanjiRain.p, NOCAR.legs.g]);
+    for (const A of ARMS) for (const m of [A.fore, A.cuff, A.upper, A.zfore]) keep.add(m);
+    NOCAR.list = car.children.filter(o => !keep.has(o)).map(o => [o, o.visible]);
+  }
+  if (on !== NOCAR.on){
+    NOCAR.on = on;
+    for (const [o, v] of NOCAR.list) o.visible = on ? false : (o === hoodPivot ? true : v);
+  }
+  NOCAR.legs.g.visible = on;
+  if (on){
+    NOCAR.ph += dt * (2 + P.v * 0.35);
+    const s = Math.sin(NOCAR.ph);
+    NOCAR.legs.legs[0].rotation.z = 1.0 * s; NOCAR.legs.legs[1].rotation.z = -1.0 * s;
+    cam.position.y = 1.27 + 0.045 * Math.abs(Math.cos(NOCAR.ph));
+  } else cam.position.y = 1.27;
+  /* looking down a little further while running, so your feet come into view */
+  const wantPitch = (on ? -22 : -10) * D2R; cam.rotation.x += (wantPitch - cam.rotation.x) * Math.min(1, dt * 3);
+}
 /* anomaly 1, grown in by degrees (k 0..1): the wheel's three spokes draw back into the hub while
    the ship's wheel's eight spokes and inner ring grow out of it and its handles sprout from the
    rim. The ordinary rim and hub stay throughout (the helm's own are hidden), swelling a hair. */
@@ -2249,12 +2350,27 @@ function busGeo(){
   return b.geo();
 }
 const BUS_GEO = busGeo();
+/* the bus company's name down both sides, in a swash italic (09-28): "Skat Liner" */
+const busLogo = (() => {
+  const cv = signCanvas(768, 72), g = cv.getContext('2d');
+  g.fillStyle = '#e0e0dc'; g.fillRect(0, 0, 768, 72);
+  g.fillStyle = '#1c2f78'; g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.font = 'italic 700 54px Georgia, "Times New Roman", serif'; g.fillText('Skat Liner', 24, 36);
+  const w = g.measureText('Skat Liner').width;
+  g.strokeStyle = '#d9607a'; g.lineWidth = 5; g.beginPath(); g.moveTo(30, 62); g.bezierCurveTo(200, 50, 420, 70, 40 + w + 60, 40); g.stroke();
+  g.fillStyle = '#d9607a'; g.font = 'italic 700 22px Georgia, serif'; g.fillText('express', 60 + w, 50);
+  const tex = new THREE.CanvasTexture(cv), b = new B(), y0 = 2.13, y1 = 2.6, x0 = -5.7, x1 = -0.7, z = 1.266;
+  b.quad([x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z], [1, 1, 1], 0.1);        /* right side: reads front-to-back from outside */
+  b.quad([x1, y0, -z], [x0, y0, -z], [x0, y1, -z], [x1, y1, -z], [1, 1, 1], 0.1);    /* left side */
+  return { geo: b.geo(), mat: mapMat(tex) };
+})();
 const traffic = [];
 function addCar(onc, truck, k, bus = false){
   const mesh = new THREE.Mesh(bus ? BUS_GEO : truck ? TRUCK_GEOS[k % 2] : CAR_GEOS[k % CAR_GEOS.length], worldMat);
   scene.add(mesh);
   const c = { mesh, onc, truck, bus, hl: bus ? 6.0 : truck ? 5.5 : 2.25, hw: truck ? 1.25 : 0.89, x: 0, z: 0, lane: 1, v: 25, vPref: 25,
               lc: 0, tgt: 1, ph: 0, ind: 0, timer: 10 + Math.random()*20, th: 0 };
+  if (bus) mesh.add(new THREE.Mesh(busLogo.geo, busLogo.mat));
   c.hl0 = c.hl; traffic.push(c); return c;
 }
 for (let i = 0; i < 9; i++) addCar(false, i === 2 || i === 6, i, i === 6);   /* i 6: the highway bus */
@@ -2908,8 +3024,8 @@ function readInput(){
   for (const p of pads){ if (!p) continue;
     const ax = p.axes[0] || 0; if (Math.abs(ax) > 0.12) st += ax;
     /* accelerator on the left trigger (and B), brake on the right trigger (and A) - as asked */
-    thr = Math.max(thr, p.buttons[6] ? p.buttons[6].value : 0, p.buttons[1] && p.buttons[1].pressed ? 1 : 0);
-    brk = Math.max(brk, p.buttons[7] ? p.buttons[7].value : 0, p.buttons[0] && p.buttons[0].pressed ? 1 : 0); }
+    thr = Math.max(thr, p.buttons[7] ? p.buttons[7].value : 0, p.buttons[1] && p.buttons[1].pressed ? 1 : 0);
+    brk = Math.max(brk, p.buttons[6] ? p.buttons[6].value : 0, p.buttons[0] && p.buttons[0].pressed ? 1 : 0); }
   return { thr, brk, st: clamp(st, -1, 1) };
 }
 
@@ -2946,6 +3062,8 @@ const ANOMALIES = {
   44: 'トンネル手前の看板の「ラジオ」が「オジヤ」になっている',
   49: '白線がすごく細くなっている',
   50: '運転手の手がゾンビの手になっている',
+  51: 'トンネルの道路を黒いモンスターがうろうろしている（ぶつかると事故）',
+  52: '車が無く、ハンドルと手だけで、自分の足で走っている',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
   46: 'トンネルの壁がストリートアート（スプレーの落書き）だらけ',
@@ -2963,8 +3081,8 @@ let noInd = false;                     // anomaly 29, while it is showing
 /* 5 levels (09-28): 1 = can't miss it ... 5 = very hard. 1 (舵) and 40 (mirror) change slowly,
    so they count as level 4. */
 const DIFF = [
-  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46],
-  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50],
+  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52],
+  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51],
   [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
@@ -3256,7 +3374,7 @@ function startHomeLeg(){
   /* at the driver's window, in view as you turn - taken from where the car now stops (09-28: it
      stops 2.5 m further on than it did, and he was left knocking behind you) */
   const stopW = pathPose(HP, HP.L - 16.5, 0, {});
-  Object.assign(WALK, { sx: tx + 4.4, sz: stopW.z - 4.5, tx: stopW.x + 2.1, tz: stopW.z - 0.6 });
+  Object.assign(WALK, { sx: tx + 4.4, sz: stopW.z - 5.5, tx: stopW.x + 2.2, tz: stopW.z - 0.95 });   /* a little ahead of the window, so he is in view on a narrow screen too */
   KNOCK.last = 0;
   /* at the gate, both inside the view once you have turned to look, facing the car and waving */
   family.wife.g.position.set(tx + 4.5, gy, hz + 3.0); family.kid.g.position.set(tx + 4.3, gy, hz + 3.75);   /* mother and child side by side */
@@ -3364,13 +3482,19 @@ function step(dt){
     P.v = Math.max(0, P.v - 10*dt); P.deadT += dt;
     if (P.deadT > 1.6 && !P.over) gameOver();
   } else {
-    if (inp.thr > 0) P.v += 5.6 * inp.thr * (1 - P.v / VMAX) * dt;
-    if (inp.brk > 0) P.v -= 11 * inp.brk * dt;
+    const ah = P.homeLeg ? (P.hp === HOME_M || P.s > P.hp.tollS + 10) : (P.home === 'main' && !P.onExit && P.x > TOLL_M + 10);
+    if (inp.thr > 0 && !ah) P.v += 5.6 * inp.thr * (1 - P.v / VMAX) * dt;
+    if (inp.brk > 0 && !ah) P.v -= 11 * inp.brk * dt;
     P.v = clamp(P.v - (0.15 + 0.012 * P.v) * dt, 0, VMAX);
   }
-  P.steer += ((P.dead ? 0 : inp.st) - P.steer) * Math.min(1, dt * 7);
+  /* 09-28: once through the toll gate on the way home - either ending route - the car drives
+     itself: no steering from you, and it settles to an ordinary-road speed (about 40 km/h) */
+  const autoHome = P.homeLeg ? (P.hp === HOME_M || P.s > P.hp.tollS + 10) : (P.home === 'main' && !P.onExit && P.x > TOLL_M + 10);
+  if (autoHome) P.v += clamp(11 - P.v, -3 * dt, 2 * dt);
+  P.steer += ((P.dead || autoHome ? 0 : inp.st) - P.steer) * Math.min(1, dt * 7);
   P.latV = P.steer * 3.2 * clamp(P.v / 8, 0, 1);
   P.d += P.latV * dt;
+  if (autoHome && P.homeLeg) P.d += (0 - P.d) * Math.min(1, dt * 1.2);
   /* staying on the main line was the right answer at 8番出口: the car eases over to the left and
      into the opened lane by itself, so the way home cannot be missed (it used to be up to you,
      and going straight on meant another lap) */
@@ -3397,7 +3521,7 @@ function step(dt){
     /* a car behind on that side counts while it could still close up on you (a bus is 12 m long) */
     const blocked = traffic.some(c => !c.onc && !c.parked && Math.abs(c.z - P.d) < 2.8 && Math.sign(c.z - P.d) === side &&
       c.x - P.x < c.hl + 4 && P.x - c.x < c.hl + 6 + Math.max(0, c.v - P.v) * 2);
-    P.v += clamp(13 - P.v, -3 * dt, 0);   /* 09-28: the car slows down by itself once through the toll, as if pulling off */
+
     if (!blocked) P.d += (tgt - P.d) * Math.min(1, dt * 0.9);
     P.steer *= 0.5;
   }
@@ -3689,7 +3813,7 @@ function sync(){
      first 600 m of the zone - and turns back as quietly after the fork */
   const helmT = anomaly === 1 && z ? sm(clamp((P.x - ZONE_A - 20) / 600, 0, 1)) : 0;
   HELM.k += clamp(helmT - HELM.k, -0.1 * sdt, 0.5 * sdt);
-  morphWheel(HELM.k); updateArms();
+  morphWheel(HELM.k); updateArms(); updateNoCar(sdt);
   backseat.visible = anomaly === 10 && z;
   car.updateMatrixWorld(true);
   cam.getWorldPosition(camW);
@@ -3822,6 +3946,7 @@ function sync(){
   /* the tunnel anomalies built as overlays, moved onto the nearest copy of the tunnel */
   const tunX = SECTION * Math.round((pose.x - (TUN_A + TUN_B) / 2) / SECTION);
   for (const [o, id] of [[manyExits, 43], [peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
+  updateMonsters(sdt, tunX);
   orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
   for (const m of orbCams) m.visible = !orbSitters.visible;
   updateGates(sdt); updateMainToll(sdt);
@@ -4329,7 +4454,7 @@ function boot(data){
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => ({ count: P.count }));
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
-window.__nd = { cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, get noInd(){ return noInd; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
+window.__nd = { monsters, mainToll, cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, get noInd(){ return noInd; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
 </script>
 <script data-goatcounter="https://hachiban-ic.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 
