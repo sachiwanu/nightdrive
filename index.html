@@ -2643,7 +2643,7 @@ function spawnPatrol(){
   const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 1 ? 2 : 1;
   Object.assign(PT, { on: true, lane, z: LANES[lane], x: pose.x - 100, v: P.v + 12, mode: anomaly,
                       mesh: anomaly === 32 ? patrols.inverted : anomaly === 31 ? patrols.blue : patrols.normal,
-                      sx: anomaly === 34 ? 2.2 : anomaly === 35 ? 0.45 : 1 });   /* a limousine / squashed flat */
+                      sx: anomaly === 34 ? 2.2 : anomaly === 35 ? 0.2 : 1 });   /* a limousine / squashed flat */
 }
 /* the truck rides at 0.6 of your speed in the lane beside yours (the left one if it can), placed so
    you come up alongside it at the next "1km" sign */
