@@ -553,6 +553,7 @@ uniform vec3 uH0p; uniform vec3 uH0d; uniform vec3 uH0r; uniform float uH0i;
 uniform vec3 uH1p; uniform vec3 uH1d; uniform vec3 uH1r; uniform float uH1i;
 uniform vec3 uFogC; uniform float uFogD; uniform float uDay;
 uniform vec3 uTun;   /* tunnel x range and a gain on its light (flicker anomaly) */
+uniform float uNoRoof;   /* anomaly 54: the bore above the panels is not there */
 varying vec3 vCol; varying float vEmi; varying float vLit; varying vec3 vW; varying float vDepth;
 #ifdef ND_MAP
 uniform sampler2D uMap; varying vec2 vUv;
@@ -577,6 +578,14 @@ float beam(vec3 p, vec3 o, vec3 d, vec3 r){
   return c * smoothstep(0.2, 2.5, a) / (1.0 + a * a * 0.0017);
 }
 void main(){
+  if (uNoRoof > 0.5 && vW.y > 3.75){
+    float lxr = mod(vW.x, uSection);
+    if (lxr > uTun.x - 0.3 && lxr < uTun.y + 0.3){
+      float r0 = length(vec2(vW.z - ${BORE_C0.toFixed(2)}, vW.y)), r1 = length(vec2(vW.z - ${BORE_C1.toFixed(2)}, vW.y));
+      if (r0 > ${BORE_R.toFixed(2)} - 0.75 && abs(vW.z - ${BORE_C0.toFixed(2)}) < ${BORE_R.toFixed(2)} + 0.8) discard;   /* the bore and all the hill above it */
+      if (r1 > ${BORE_R.toFixed(2)} - 0.75 && abs(vW.z - ${BORE_C1.toFixed(2)}) < ${BORE_R.toFixed(2)} + 0.8) discard;
+    }
+  }
   vec3 alb = vCol;
   #ifdef ND_MAP
     alb *= texture2D(uMap, vUv).rgb;
@@ -696,7 +705,7 @@ const WU = {
   uH0p: { value: new THREE.Vector3() }, uH0d: { value: new THREE.Vector3(1, 0, 0) }, uH0r: { value: new THREE.Vector3(0, 0, 1) }, uH0i: { value: 1 },
   uH1p: { value: new THREE.Vector3() }, uH1d: { value: new THREE.Vector3(1, 0, 0) }, uH1r: { value: new THREE.Vector3(0, 0, 1) }, uH1i: { value: 0 },
   uFogC: { value: new THREE.Vector3(FOG[0], FOG[1], FOG[2]) }, uFogD: { value: 0.0075 },
-  uTun: { value: new THREE.Vector3(TUN_A, TUN_B, 1) }, uDay: { value: 0 }, uWarp: { value: 0 },
+  uTun: { value: new THREE.Vector3(TUN_A, TUN_B, 1) }, uDay: { value: 0 }, uWarp: { value: 0 }, uNoRoof: { value: 0 },
 };
 const worldMat = new THREE.ShaderMaterial({ uniforms: WU, vertexShader: WORLD_VS, fragmentShader: WORLD_FS, side: THREE.DoubleSide });
 const mapMat = tex => new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: tex } }), defines: { ND_MAP: '' },
@@ -1659,6 +1668,160 @@ function updateMonsters(dt, tunX){
     if (!P.dead && !P.onExit && !P.home && Math.abs(M.x + tunX - pose.x) < 2.3 + 0.45 && Math.abs(M.z - pose.z) < 0.92 + 0.45) die('衝突した');
   }
 }
+/* anomaly 43, reworked (09-30): no more rows of exits - the one emergency exit in your bore has
+   green liquid running out under its door and spreading across the road, further the closer you
+   get, with a sheen that keeps flowing */
+const goo = (() => {
+  const mk = (w, h, fill) => { const c = signCanvas(w, h); fill(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); return t; };
+  const rnd = mulberry32(43);
+  const blob = mk(512, 512, (g, W, H) => {          /* door edge at the top (v = 1), spreading down and out */
+    g.clearRect(0, 0, W, H);
+    const grad = (x, y, r, a) => { const q = g.createRadialGradient(x, y, 0, x, y, r); q.addColorStop(0, `rgba(255,255,255,${a})`); q.addColorStop(0.7, `rgba(255,255,255,${a * 0.9})`); q.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = q; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+    grad(256, 30, 90, 1);
+    for (let i = 0; i < 26; i++){ const t = rnd(); grad(256 + (rnd() - 0.5) * 380 * t, 40 + t * 430, 40 + rnd() * 70 * (1 - t * 0.5), 0.95); }
+    for (let i = 0; i < 5; i++){ const x = 256 + (rnd() - 0.5) * 300; g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(x, 60, 10 + rnd() * 14, 380 + rnd() * 60); }   /* runnels */
+  });
+  const streak = mk(128, 256, (g, W, H) => {
+    g.fillStyle = '#3cff5a'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 70; i++){ g.fillStyle = `rgba(200,255,200,${0.15 + rnd() * 0.35})`; g.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 4, 20 + rnd() * 60); }
+  });
+  streak.wrapS = streak.wrapT = THREE.RepeatWrapping; streak.repeat.set(3, 2);
+  const ex = (TUN_A + TUN_B) / 2, ez = BORE_C0 - 7.2, L = 16, Wd = 9.5;
+  const geo = new THREE.PlaneGeometry(L, Wd).rotateX(-Math.PI / 2);   /* texture top (v = 1) ends up at local -z */
+  const base = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.12, 0.62, 0.2), alphaMap: blob, transparent: true, depthWrite: false }));
+  const sheen = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: streak, alphaMap: blob, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const piv = new THREE.Group(); piv.position.set(ex, 0.05, ez + 0.05);   /* the texture's top edge sits on the doorway, spreading toward +z (across the road) */
+  for (const m of [base, sheen]){ m.position.set(0, 0, Wd / 2); piv.add(m); }
+  sheen.position.y = 0.01;
+  const g = new THREE.Group(); g.add(piv); g.visible = false; scene.add(g);
+  return { g, piv, base, sheen, ex, L, Wd };
+})();
+function updateGoo(dt, tunX){
+  const on = anomaly === 43;
+  goo.g.visible = on; if (!on) return;
+  goo.g.position.x = tunX;
+  /* it spreads as you come down the tunnel toward it */
+  const k = clamp((pose.x - tunX - TUN_A + 40) / (goo.ex - TUN_A - 10), 0.2, 1);
+  goo.piv.scale.set(k, 1, 0.35 + 0.65 * k);
+  goo.sheen.material.map.offset.y -= dt * 0.25;
+}
+/* anomaly 54 (09-30): inside the tunnel the roof is gone - everything of the bore above the white
+   panels - and there are stars overhead. The bore is cut away in the world shader (uNoRoof); the
+   crown lamps' halos go dark; the stars are a dome of points that rides with the camera. */
+const stars = (() => {
+  const N = 2600, pos = new Float32Array(N * 3), rnd = mulberry32(54);
+  for (let i = 0; i < N; i++){
+    const a = rnd() * Math.PI * 2, e = Math.asin(0.04 + Math.pow(rnd(), 1.6) * 0.96), r = 900;
+    pos[i*3] = Math.cos(a) * Math.cos(e) * r; pos[i*3+1] = Math.sin(e) * r; pos[i*3+2] = Math.sin(a) * Math.cos(e) * r;
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const p = new THREE.Points(geo, new THREE.PointsMaterial({ color: new THREE.Color(0.85, 0.9, 1.0), size: 2.6, sizeAttenuation: false, depthWrite: false }));
+  p.visible = false; p.frustumCulled = false; scene.add(p);
+  return p;
+})();
+function updateRoofless(){
+  const on = anomaly === 54;
+  WU.uNoRoof.value = on ? 1 : 0;
+  const inTun = !P.onExit && P.x > TUN_A - 60 && P.x < TUN_B + 20;
+  stars.visible = on && inTun; stars.position.copy(camW);
+  if (on){ tunGlowMat.uniforms.uK.value = 0; WU.uTun.value.z = Math.min(WU.uTun.value.z, 0.45); }
+}
+/* anomaly 55 (09-30): the highway bus comes up ahead of you in the next lane; as you draw near,
+   every window bursts at once - curtains stream out and flap in the wind, a passenger is half out
+   of an upper window about to fall, and rubbish pours out of the windows and tumbles back at you */
+const BW = { placed: false, broken: false, t: 0, bus: null, wreck: null, parts: null };
+function buildBusWreck(bus){
+  const g = new THREE.Group(), curt = [];
+  const CC = [[0.78, 0.72, 0.55], [0.35, 0.42, 0.62], [0.7, 0.3, 0.32]];
+  for (const side of [-1, 1]) for (const [y0, xs] of [[2.1, [-4.6, -3.2, -1.8, -0.4, 1.0, 2.4, 3.6]], [3.34, [-5.0, -3.6, -2.2, -0.8, 0.6, 2.0, 3.4, 4.6]]]){
+    for (const x of xs){
+      const piv = new THREE.Group(); piv.position.set(x, y0, side * 1.27);
+      const b = new B(), col = CC[curt.length % 3];
+      b.quad([-0.4, 0, 0], [0.4, 0, 0], [0.4, -0.72, 0], [-0.4, -0.72, 0], col, 0.05);
+      piv.add(new THREE.Mesh(b.geo(), worldMat)); g.add(piv);
+      curt.push({ piv, side, ph: Math.random() * 6 });
+    }
+    /* jagged bits of glass left in the frames */
+    const sb = new B();
+    for (let x = -5.2; x < 4.6; x += 0.9){
+      for (const [ya, yb] of [[1.49, 2.11], [2.56, 3.34]]){
+        sb.quad([x, ya, side * 1.275], [x + 0.25, ya, side * 1.275], [x + 0.05, ya + 0.18, side * 1.275], [x, ya + 0.12, side * 1.275], [0.55, 0.7, 0.8], 0.15);
+        sb.quad([x + 0.4, yb, side * 1.275], [x + 0.6, yb, side * 1.275], [x + 0.5, yb - 0.16, side * 1.275], [x + 0.45, yb - 0.1, side * 1.275], [0.55, 0.7, 0.8], 0.15);
+      }
+    }
+    g.add(new THREE.Mesh(sb.geo(), worldMat));
+  }
+  /* the passenger hanging out of an upper window on your side (both sides get one) */
+  const men = [-1, 1].map(side => {
+    const p = personModel(false, [0.3, 0.45, 0.7]);
+    scene.remove(p.g); p.g.visible = true;
+    p.g.position.set(1.5, 2.3, side * 1.1); p.g.rotation.set(side * 1.05, 0, 0);
+    g.add(p.g); return { p, side };
+  });
+  g.visible = false; bus.mesh.add(g);
+  return { g, curt, men };
+}
+const busJunk = (() => {
+  const N = 260, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), v = new Float32Array(N * 3), life = new Float32Array(N);
+  for (let i = 0; i < N; i++){ pos[i*3+1] = -100; const k = Math.random(); const c = k < 0.3 ? [0.6, 0.78, 0.9] : k < 0.6 ? [0.85, 0.83, 0.75] : k < 0.8 ? [0.35, 0.33, 0.3] : [0.7, 0.35, 0.3]; col.set(c, i * 3); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.22, vertexColors: true, sizeAttenuation: true }));
+  pts.frustumCulled = false; pts.visible = false; scene.add(pts);
+  return { pts, pos, v, life, N, next: 0 };
+})();
+const _bw = new THREE.Vector3();
+function emitJunk(bus, n, speed){
+  const J = busJunk;
+  for (let k = 0; k < n; k++){
+    const i = J.next; J.next = (J.next + 1) % J.N;
+    const side = Math.random() < 0.5 ? -1 : 1, upper = Math.random() < 0.5;
+    _bw.set(-5 + Math.random() * 9.5, upper ? 2.95 : 1.8, side * 1.3); bus.mesh.localToWorld(_bw);
+    J.pos[i*3] = _bw.x; J.pos[i*3+1] = _bw.y; J.pos[i*3+2] = _bw.z;
+    const out = side * Math.cos(bus.th), outx = -side * Math.sin(bus.th);
+    J.v[i*3] = bus.v * 0.55 + outx * speed + (Math.random() - 0.5); J.v[i*3+1] = 0.5 + Math.random() * 2; J.v[i*3+2] = out * speed * (0.6 + Math.random() * 0.8);
+    J.life[i] = 2.5 + Math.random() * 2;
+  }
+}
+function updateBusWreck(dt){
+  const on = anomaly === 55;
+  const bus = BW.bus || (BW.bus = traffic.find(c => c.bus && !c.onc));
+  if (!bus) return;
+  if (!BW.wreck) BW.wreck = buildBusWreck(bus);
+  if (!on){ if (BW.placed || BW.broken){ BW.placed = BW.broken = false; bus.vPref = 21 + Math.random() * 3; } BW.wreck.g.visible = false; busJunk.pts.visible = false; return; }
+  /* bring it up well ahead in the lane beside yours, a little slower than you */
+  if (!BW.placed && !P.onExit && P.x > ZONE_A - 60 && P.x < GANTRY_X - 400){
+    const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 2 ? 1 : pl + 1;
+    Object.assign(bus, { x: pose.x + 260, z: LANES[lane], lane, tgt: lane, lc: 0, v: 19, vPref: 19, kind: 'car' });
+    BW.placed = true; BW.broken = false; BW.t = 0;
+  }
+  const dx = bus.x - pose.x;
+  if (BW.placed && !BW.broken && dx < 38 && dx > -10 && Math.abs(bus.z - pose.z) < 8){
+    BW.broken = true; BW.t = 0; sndShatter(); emitJunk(bus, 90, 4);
+  }
+  BW.wreck.g.visible = BW.broken;
+  busJunk.pts.visible = BW.broken;
+  if (!BW.broken) return;
+  BW.t += dt;
+  if (Math.random() < dt * 22) emitJunk(bus, 1, 2.5);
+  for (const c of BW.wreck.curt){
+    c.ph += dt * (7 + Math.random() * 3);
+    c.piv.rotation.set(c.side * (-1.25 - 0.35 * Math.sin(c.ph)), 0, 0.5 + 0.2 * Math.sin(c.ph * 0.7));   /* out and streaming back */
+  }
+  for (const m of BW.wreck.men){
+    const w = Math.sin(BW.t * 9);
+    m.p.arms[0].rotation.z = 2.4 + 0.6 * w; m.p.arms[1].rotation.z = 2.4 - 0.6 * w;
+    m.p.g.position.z = m.side * (1.1 + Math.min(0.35, BW.t * 0.05));
+  }
+  const J = busJunk;
+  for (let i = 0; i < J.N; i++){
+    if (J.life[i] <= 0) continue;
+    J.life[i] -= dt;
+    J.v[i*3] -= J.v[i*3] * 0.9 * dt; J.v[i*3+2] -= J.v[i*3+2] * 0.8 * dt; J.v[i*3+1] -= 4.5 * dt;
+    J.pos[i*3] += J.v[i*3] * dt; J.pos[i*3+1] = Math.max(0.03, J.pos[i*3+1] + J.v[i*3+1] * dt); J.pos[i*3+2] += J.v[i*3+2] * dt;
+    if (J.life[i] <= 0) J.pos[i*3+1] = -100;
+  }
+  J.pts.geometry.attributes.position.needsUpdate = true;
+}
 const orbCams = [];
 scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); if (o.name === 'zoneSign') zoneSigns.push(o); });
 /* pristine copies, so each new section can start from a clean slate */
@@ -1909,7 +2072,7 @@ function drawMeter(kmh, shownKmh){
       g.lineWidth = big ? 3 : 1.5; g.beginPath(); g.moveTo(cx + Math.cos(a)*r0, cy + Math.sin(a)*r0); g.lineTo(cx + Math.cos(a)*(r - 8), cy + Math.sin(a)*(r - 8)); g.stroke();
       if (big && lab){ g.font = `700 ${Math.round(r * 0.17)}px ${SIGNFONT}`; g.fillText(lab(i / sub), cx + Math.cos(a)*(r - 38), cy + Math.sin(a)*(r - 38)); }
     }
-    const a = A(clamp(val / vmax, 0, 1.02)) - Math.PI/2;
+    const a = METER.spin ? clock * (vmax > 50 ? 5.5 : 7.3) + cx * 0.01 : A(clamp(val / vmax, 0, 1.02)) - Math.PI/2;   /* anomaly 53: round and round */
     g.strokeStyle = '#ff2a1a'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx - Math.cos(a)*14, cy - Math.sin(a)*14); g.lineTo(cx + Math.cos(a)*(r - 12), cy + Math.sin(a)*(r - 12)); g.stroke();
     g.fillStyle = '#1a1b1e'; g.beginPath(); g.arc(cx, cy, 11, 0, Math.PI*2); g.fill();
   };
@@ -2036,7 +2199,8 @@ function updateArms(){
     if (zom){ A.zfore.position.copy(A.fore.position); A.zfore.quaternion.copy(A.fore.quaternion); A.zfore.scale.copy(A.fore.scale); }
   }
   METER.t += 1;
-  if (METER.t % 5 === 1){
+  METER.spin = anomaly === 53 && inZone();
+  if (METER.t % (METER.spin ? 2 : 5) === 1){
     const kmh = Math.round(P.v * 3.6), gear = Math.min(6, 1 + Math.floor(kmh / 32));
     METER.rpm = P.dead ? 0 : 900 + (kmh - (gear - 1) * 28) * 95 + (gear > 1 ? 1500 : 0);
     drawMeter(kmh, anomaly === 16 ? kmh * 10 : kmh);
@@ -2991,7 +3155,7 @@ function updateTraffic(dt){
     const z0 = c.z;
     c.x += c.v * dt;
     /* a patrol car closing from behind in your lane: move over now (trucks too), away from its lane */
-    if (c.lc === 0 && PT.on && !c.stand && Math.abs(c.z - PT.z) < 2 && c.x > PT.x && c.x - PT.x < 90){
+    if (c.lc === 0 && PT.on && !c.stand && !(c === BW.bus && BW.placed) && Math.abs(c.z - PT.z) < 2 && c.x > PT.x && c.x - PT.x < 90){
       for (const dir of [c.lane === 0 ? 1 : -1, c.lane === 0 ? -1 : 1]){
         const tl = c.lane + dir;
         if (tl < 0 || tl > 2 || tl === PT.lane) continue;
@@ -3093,12 +3257,15 @@ const ANOMALIES = {
   40: 'ルームミラーがヤンキー風にめちゃくちゃ斜めになっている',
   41: 'トンネルの形が微妙に歪んでいる',
   42: 'オービスのカメラの代わりにスマホを持った人が座って、車が通るたびに撮影している',
-  43: 'トンネルの非常口がやたらたくさんある',
+  43: 'トンネルの非常口から緑の液体が道路に流れ出している',
   44: 'トンネル手前の看板の「ラジオ」が「オジヤ」になっている',
   49: '白線がすごく細くなっている',
   50: '運転手の手がゾンビの手になっている',
   51: 'トンネルの道路を黒いモンスターがうろうろしている（ぶつかると事故）',
   52: '車が無く、ハンドルと手だけで、自分の足で走っている',
+  53: 'メーターの針が速度と関係なくぐるぐる回り続けている',
+  54: 'トンネルの屋根が無く、星空が見えている',
+  55: 'バスの窓が全部割れて、カーテンや人やゴミが外に出てくる',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
   46: 'トンネルの壁がストリートアート（スプレーの落書き）だらけ',
@@ -3116,8 +3283,8 @@ let noInd = false;                     // anomaly 29, while it is showing
 /* 5 levels (09-28): 1 = can't miss it ... 5 = very hard. 1 (舵) and 40 (mirror) change slowly,
    so they count as level 4. */
 const DIFF = [
-  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52],
-  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51],
+  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52, 54, 55],
+  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51, 53],
   [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
@@ -3253,7 +3420,8 @@ function rollAnomaly(){
      coming up in about 27 % of zones, so they are halved and the hard ones take the difference
      (per zone: easy 13.5 %, medium 24.6 %, hard 21.9 %). The man on the motorbike joins the
      pool from the fourth zone. */
-  const pool = ANOM_IDS.filter(id => (P.sections >= 3 || !BIKER_IDS.includes(id)) && (P.sections >= 1 || !LAP2_IDS.includes(id)));
+  /* 09-30: an anomaly you have had does not come back until you are sent back to 0 */
+  const pool = ANOM_IDS.filter(id => !SEEN.has(id) && (P.sections >= 3 || !BIKER_IDS.includes(id)) && (P.sections >= 1 || !LAP2_IDS.includes(id)));
   anomaly = 0;
   if (Math.random() < 0.6){
     let q = Math.random(), cls = 0;
@@ -3261,7 +3429,8 @@ function rollAnomaly(){
     while (cls < 4 && q >= share[cls]){ q -= share[cls]; cls++; }
     let list = DIFF[P.sections === 0 ? 0 : cls].filter(id => pool.includes(id));   /* 09-30: the first lap only ever has an obvious one (Lv1), or none */
     if (!list.length) list = pool;
-    anomaly = list[Math.floor(Math.random() * list.length)];
+    anomaly = list.length ? list[Math.floor(Math.random() * list.length)] : 0;
+    if (anomaly) SEEN.add(anomaly);
   }
   applyAnomaly();
   /* bikes / runners next: clear the cars from around you now, so by the tunnel almost all
@@ -3382,6 +3551,7 @@ function judgeAtFork(took){
       }
     }
     P.count = right ? Math.min(P.count + 1, 8) : 0;
+    if (!right) SEEN.clear();
     P.best = Math.max(P.best, P.count);
   }
   pendingRoll = true;                  /* drawn a little further on, once nothing of either zone shows */
@@ -3500,7 +3670,9 @@ function continueRun(){
   Object.assign(P, keep);
   rollAnomaly();
 }
+const SEEN = new Set();                // anomalies had since you were last at 0
 function resetRun(){
+  SEEN.clear();
   Object.assign(P, { onExit: true, x: START_X, s: START_S, d: 0, v: 5, steer: 0, latV: 0, dead: false, deadT: 0, runT: 0, risk: 0, rearHit: false,
                      took: false, count: 0, sections: 0, over: false, home: false, homeLeg: false, hp: HOME, late: false, ended: false, endT: 0,
                      crashes: 0, mistakes: 0, endingNo: 0 });
@@ -3764,6 +3936,7 @@ function step(dt){
   if (tunFlick){ flickT -= dt; if (flickT <= 0){ flickOn = !flickOn; flickT = flickOn ? 0.08 + Math.random() * 0.9 : 0.04 + Math.random() * 0.22; } tunK = flickOn ? 1 : 0.06; }
   else tunK = 1;
   WU.uTun.value.z = tunK; tunGlowMat.uniforms.uK.value = tunK;
+  updateRoofless();
   if (rainOn){
     const fall = 10, k = 0.035;
     for (let i = 0; i < RAIN_N; i++){
@@ -4009,11 +4182,12 @@ function sync(){
   if (tw !== tunWord){ tunWord = tw; drawTunnelPlate(); }
   /* the tunnel anomalies built as overlays, moved onto the nearest copy of the tunnel */
   const tunX = SECTION * Math.round((pose.x - (TUN_A + TUN_B) / 2) / SECTION);
-  for (const [o, id] of [[manyExits, 43], [peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
+  for (const [o, id] of [[peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
+  manyExits.visible = false; updateGoo(sdt, tunX);
   updateMonsters(sdt, tunX);
   orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
   for (const m of orbCams) m.visible = !orbSitters.visible;
-  updateGates(sdt); updateMainToll(sdt);
+  updateGates(sdt); updateMainToll(sdt); updateBusWreck(sdt);
   if (KT.on){
     const k = KT.fade * KT.fade * (3 - 2 * KT.fade); KHIDE.value = 1 - k;
     komatta.position.set(KT.x, 0, KT.z); carLampGlows(KT.x, 0, KT.z, 0, 5.5, true, anomaly === 47 ? 2 : 0, (clock * 1.4 + 0.3) % 1 < 0.5, k, k);
@@ -4232,6 +4406,19 @@ function sndKnock(){
 /* anomaly 42: the speed camera's shutter - a sharp electronic click and the whine of the strobe
    recharging, quieter the further off it is */
 /* the ETC gate's navi chime: one soft 「ポーン」 */
+/* anomaly 55: every window of the bus bursting at once */
+function sndShatter(){
+  const S = SND; if (!S.ctx) return;
+  const ctx = S.ctx, t = ctx.currentTime + 0.01, out = S.G(0.7); out.connect(S.master);
+  const s = ctx.createBufferSource(), f = S.F('highpass', 2500, 0.7), g = S.G(0);
+  s.buffer = S.white; s.connect(f); f.connect(g); g.connect(out);
+  g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.2); s.start(t, Math.random()); s.stop(t + 1.25);
+  for (let k = 0; k < 14; k++){
+    const o = ctx.createOscillator(), gg = S.G(0), tt = t + Math.random() * 0.9;
+    o.frequency.value = 3000 + Math.random() * 4000; o.connect(gg); gg.connect(out);
+    gg.gain.setValueAtTime(0.08, tt); gg.gain.exponentialRampToValueAtTime(0.001, tt + 0.12); o.start(tt); o.stop(tt + 0.13);
+  }
+}
 function sndGate(){
   const S = SND; if (!S.ctx) return;
   const ctx = S.ctx, t = ctx.currentTime + 0.01, out = S.G(0.5); out.connect(S.master);
