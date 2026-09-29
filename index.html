@@ -201,7 +201,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 </div>
 <div id="panel">
   <div class="sign intro" role="dialog" aria-labelledby="ttl">
-    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.2</span></h1>
+    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.3</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
     <p class="rule small" id="endLine">エンディングは全部で5つ。</p>
@@ -1721,7 +1721,7 @@ const stars = (() => {
 })();
 function updateRoofless(){
   const on = anomaly === 54;
-  WU.uNoRoof.value = on ? 1 : 0;
+  WU.uNoRoof.value = on && !P.onExit && P.x > TUN_A + 3 ? 1 : 0;   /* 09-30: only gone once you are inside - from outside it looks like any tunnel */
   const inTun = !P.onExit && P.x > TUN_A - 60 && P.x < TUN_B + 20;
   stars.visible = on && inTun; stars.position.copy(camW);
   if (on){ tunGlowMat.uniforms.uK.value = 0; WU.uTun.value.z = Math.min(WU.uTun.value.z, 0.45); }
