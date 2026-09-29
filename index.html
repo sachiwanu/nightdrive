@@ -204,7 +204,6 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.1</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
-    <p class="rule small">料金所のETCは時速20km以下で。速いとバーが上がらない。</p>
     <p class="rule small" id="endLine">エンディングは全部で5つ。</p>
     <p class="rule small" id="iosTip" hidden>iPhoneは「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
@@ -1541,10 +1540,8 @@ function updateGates(dt){
     /* 09-29: like a real ETC lane, it only lifts if you come up to it at 20 km/h or less - too
        fast and it stays down, and running into it is a crash */
     const ds = G.s - P.s, near = onIt && ds < 16 && ds > -9;
-    const want = near && (G.open || P.v <= GATE_V);
+    const want = near;
     if (want && !G.open) sndGate();
-    if (onIt && !P.dead && G.prev > 0 && ds <= 0 && G.a < 0.9) die('衝突した');
-    G.prev = onIt ? ds : 99;
     G.open = want;
     G.a += clamp((want ? 1.45 : 0) - G.a, -1.6 * dt, 2.6 * dt);
     G.arm.rotation.z = G.a;
@@ -1590,10 +1587,7 @@ function updateMainToll(dt){
   const X = nearTollM(pose.x); mainToll.g.position.x = X - TOLL_M;
   for (const bar of mainToll.bars){
     const near = (x, z) => Math.abs(z - bar.lz) < 1.6 && x - (X + 2) > -16 && x - (X + 2) < 9;
-    const mine = !P.onExit && near(P.x, P.d) && (bar.mine || P.v <= GATE_V);
-    const dsb = X + 2 - P.x, inLane = !P.onExit && Math.abs(P.d - bar.lz) < 1.6;
-    if (inLane && !P.dead && bar.prev > 0 && dsb <= 0 && bar.a < 0.9) die('衝突した');
-    bar.prev = inLane ? dsb : 99;
+    const mine = !P.onExit && near(P.x, P.d);
     let want = mine;
     for (const c of traffic) if (!c.onc && !c.parked && near(c.x, c.z)) want = true;
     if (mine && !bar.mine) sndGate();
@@ -3261,7 +3255,7 @@ function rollAnomaly(){
   if (Math.random() < 0.6){
     let q = Math.random(), cls = 0;
     while (cls < 4 && q >= DIFF_SHARE[cls]){ q -= DIFF_SHARE[cls]; cls++; }
-    let list = DIFF[cls].filter(id => pool.includes(id));
+    let list = DIFF[P.sections === 0 ? 0 : cls].filter(id => pool.includes(id));   /* 09-30: the first lap only ever has an obvious one (Lv1), or none */
     if (!list.length) list = pool;
     anomaly = list[Math.floor(Math.random() * list.length)];
   }
@@ -3543,6 +3537,15 @@ function step(dt){
   /* 09-28: once through the toll gate on the way home - either ending route - the car drives
      itself: no steering from you, and it settles to an ordinary-road speed (about 40 km/h) */
   const autoHome = P.homeLeg ? (P.hp === HOME_M || P.s > P.hp.tollS + 10) : (P.home === 'main' && !P.onExit && P.x > TOLL_M + 10);
+  /* 09-30: coming up to any toll gate the car brakes itself down to 20 km/h through the ETC lane,
+     whatever you do with the pedals (the bars always lift; nothing to crash into) */
+  {
+    let ds = null;
+    if (P.onExit && !P.homeLeg){ if (!(GATES[0].a > 1.0)) ds = EX_TOLL + 2 - P.s; }   /* the ramp gate: the pedals are yours again the moment the bar is up (endings keep the cap) */
+    else if (P.homeLeg && P.hp.tollS > 0) ds = P.hp.tollS + 2 - P.s;
+    else if (P.home === 'main' && !P.onExit) ds = nearTollM(P.x) + 2 - P.x;
+    if (ds !== null && ds > -3 && ds < 80) P.v = Math.min(P.v, GATE_V + Math.max(0, ds - 12) * 0.45);
+  }
   if (autoHome) P.v += clamp(11 - P.v, -3 * dt, 2 * dt);
   P.steer += ((P.dead || autoHome ? 0 : inp.st) - P.steer) * Math.min(1, dt * 7);
   P.latV = P.steer * 3.2 * clamp(P.v / 8, 0, 1);
