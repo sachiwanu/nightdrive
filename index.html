@@ -201,7 +201,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 </div>
 <div id="panel">
   <div class="sign intro" role="dialog" aria-labelledby="ttl">
-    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9</span></h1>
+    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.1</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule warn">車にぶつかったら死ぬ。</p>
     <p class="rule small">料金所のETCは時速20km以下で。速いとバーが上がらない。</p>
@@ -3128,7 +3128,7 @@ const DIFF = [
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
 ];
-const DIFF_SHARE = [0.10, 0.125, 0.41, 0.21, 0.155];   /* old easy 0.225 = 1+2, medium = 3, old hard 0.365 = 4+5 */
+const DIFF_SHARE = [0.38, 0.35, 0.18, 0.06, 0.03];   /* 09-30: tuned toward the original's difficulty - mostly easy ones (was 0.10/0.125/0.41/0.21/0.155) */
 const KT = { on: false, x: 0, z: 0, v: 0 };   // the 困った運輸 truck
 const PT = { on: false, x: 0, z: 0, v: 0, lane: 1, sx: 1 };   // the patrol car (sx: its length, 1 = normal)
 const BK = { on: false, x: 0, z: 0, v: 0, phase: 0, t: 0, wheel: 0, scale: 1, mode: 0, twin: false };
