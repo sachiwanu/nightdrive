@@ -139,6 +139,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 .stats.home-stats{grid-template-columns:repeat(2,1fr);}
 .home-card{max-height:calc(100dvh - 32px);overflow:auto;}
 .ver{font-size:.3em;font-weight:700;opacity:.6;margin-left:.45em;letter-spacing:.04em;vertical-align:middle;}
+#updBtn{margin-left:8px;padding:6px 14px;border-radius:8px;border:0;background:var(--sodium);color:#2A1706;font:700 15px/1 "BIZ UDPGothic",system-ui,sans-serif;cursor:pointer;}
 .over-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .xshare{display:block;width:100%;height:44px;margin-top:10px;border:1px solid rgba(255,255,255,.35);border-radius:10px;background:#000;color:#fff;
   font:700 16px/1 "BIZ UDPGothic",system-ui,sans-serif;letter-spacing:.06em;cursor:pointer;}
@@ -212,6 +213,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.4</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
     <p class="rule small" id="endLine">エンディングは全部で6つ。</p>
+    <p class="rule small" id="upd" hidden>新しいバージョン <b id="updVer"></b> があります　<button id="updBtn" type="button">更新する</button></p>
     <p class="rule small" id="iosTip" hidden>iPhoneは横向きで。「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
       <thead><tr><th></th><th>ブレーキ</th><th>ハンドル</th><th>クラクション</th></tr></thead>
@@ -4882,6 +4884,27 @@ document.addEventListener('visibilitychange', () => {
   if (SND.ctx){ if (document.hidden) SND.ctx.suspend(); else if (running || (P.ended && !endEl.hidden)) SND.ctx.resume(); }
   last = performance.now();
 });
+/* 10-01: a web app on the iPhone home screen has no reload button and keeps showing the old
+   build. On opening (and whenever it comes back to the front) we quietly fetch the page again,
+   past every cache, and if its version is newer than ours offer a button that loads it. */
+(function checkUpdate(){
+  const mine = (document.querySelector('#ttl .ver') || {}).textContent || '';
+  const el = $('upd'), btn = $('updBtn');
+  let busy = false;
+  const check = async () => {
+    if (busy || location.protocol === 'file:') return; busy = true;
+    try {
+      const r = await fetch(location.pathname + '?nocache=' + Date.now(), { cache: 'no-store' });
+      if (r.ok){
+        const m = (await r.text()).match(/<span class="ver">(v[0-9.]+)<\/span>/);
+        if (m && m[1] !== mine){ $('updVer').textContent = m[1]; el.hidden = false; btn.onclick = () => location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]) + location.hash); }
+      }
+    } catch (_) {}
+    busy = false;
+  };
+  check();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+})();
 /* full screen on phones (09-28): browsers only allow it from a tap, so it goes with 出発, plus a
    「全」 button to get back into it. Landscape is locked where the browser allows (Android).
    iPhone Safari has no full screen for pages: there, "Add to Home Screen" is the way. */
