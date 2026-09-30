@@ -2528,14 +2528,76 @@ const backseat = (() => {
 const beadMat = (() => {
   const c = document.createElement('canvas'); c.width = 512; c.height = 320;
   const g = c.getContext('2d'), r = mulberry32(5);
-  for (let i = 0; i < 190; i++){
-    const x = r()*512, y = r()*320, s = 1.5 + r()*r()*7.5;
+  for (let i = 0; i < 900; i++){   /* 10-01: finer and many more */
+    const x = r()*512, y = r()*320, s = 0.8 + r()*r()*3.6;
     const gr = g.createRadialGradient(x - s*0.3, y - s*0.35, 0, x, y, s);
     gr.addColorStop(0, 'rgba(255,255,255,0.6)'); gr.addColorStop(0.45, 'rgba(200,215,235,0.14)'); gr.addColorStop(1, 'rgba(160,180,210,0)');
     g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, s*0.85, s, 0, 0, Math.PI*2); g.fill();
   }
   return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
 })();
+/* 10-01: windscreen wipers - two black arms parked along the bottom of the glass, sweeping up and
+   back every 1.3 s while it rains, parking again in the tunnel / once the rain stops */
+const WIPE = { t: 0, a: 0, arms: [], k: [1, 1.08], norm: [], pick: [] };   /* the left one swings a bit further, so from the seat the two look parallel (10-01) */
+(function buildWipers(){
+  const u = new THREE.Vector3(-Math.sin(55.1*D2R), Math.cos(55.1*D2R), 0), n = new THREE.Vector3(Math.cos(55.1*D2R), Math.sin(55.1*D2R), 0);
+  const base = new THREE.Vector3(1.06, 0.915, 0).addScaledVector(n, 0.03);   /* on the real glass line (the bead layer sits a little below it), its root hidden behind the dash top (10-01) */
+  const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), u, n));
+  for (const [zp, L] of [[0.46, 0.9], [-0.24, 0.9]]){   /* both the same reach */
+    const g = new THREE.Group(); g.position.copy(base).setZ(zp); g.quaternion.copy(q);
+    const piv = new THREE.Group(); g.add(piv);
+    const b = new B(), K = [0.025, 0.025, 0.03];
+    b.box(0.05, 0, 0.01, 0.1, 0.03, 0.03, K);                       /* the spindle cap */
+    b.box(L * 0.5, 0, 0.012, L, 0.008, 0.008, K);                   /* the arm */
+    b.box(L * 0.55, 0.006, 0.016, L * 0.9, 0.006, 0.014, K);          /* the blade, pressed to the glass */
+    const wm = onLayer1(new THREE.Mesh(b.geo(), cabMat)); piv.add(wm); car.add(g);
+    /* anomaly 56 (10-01): a skewer of 三色団子 in its place, growing out of the wiper's root - a
+       bamboo stick along the arm with pink, white and green dumplings out toward its end */
+    const tp = new THREE.Group(), WOOD = [0.8, 0.68, 0.45];
+    const stick = onLayer1(new THREE.Mesh(cabAttrs(new THREE.CylinderGeometry(0.004, 0.004, L * 0.92, 6).rotateZ(Math.PI / 2), WOOD, 0.08), cabMat)); stick.position.set(L * 0.46, 0, 0.03); tp.add(stick);
+    [[0.58, [0.45, 0.75, 0.35]], [0.7, [0.95, 0.94, 0.9]], [0.82, [0.98, 0.62, 0.7]]].forEach(([f, col]) => {
+      const ball = onLayer1(new THREE.Mesh(cabAttrs(new THREE.SphereGeometry(0.042, 14, 10), col, 0.22), cabMat)); ball.position.set(L * f, 0, 0.03); tp.add(ball);
+    });
+    tp.visible = false; piv.add(tp);
+    WIPE.arms.push(piv); WIPE.norm.push(wm); WIPE.pick.push(tp);
+  }
+})();
+function updateWipers(dt, wet){
+  if (wet || WIPE.a > 0.01){
+    WIPE.t += dt;
+    const k = 0.5 - 0.5 * Math.cos(2 * Math.PI * WIPE.t / 1.3);
+    if (!wet && k < 0.02){ WIPE.t = 0; WIPE.a = 0; }           /* park at the bottom of a stroke */
+    else WIPE.a = 1.95 * k;   /* 10-01: all the way over to the right */
+  }
+  WIPE.arms.forEach((p, i) => { p.rotation.z = WIPE.a * WIPE.k[i]; });
+  const pick = anomaly === 56 && inZone();
+  WIPE.norm.forEach(m => { m.visible = !pick; }); WIPE.pick.forEach(m => { m.visible = pick; });
+}
+/* 10-01: what the wipers leave: a mask over the beads on the glass - wiped clear where the blades
+   pass, the rain beading back up over a few seconds */
+const WMASK = (() => {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 160;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 256, 160);
+  const tex = new THREE.CanvasTexture(c);
+  beadMat.alphaMap = tex; beadMat.needsUpdate = true;
+  return { c, g, tex, prev: [0, 0] };
+})();
+function wipeTrace(dt, wet){
+  const g = WMASK.g;
+  if (wet){ g.globalAlpha = Math.min(1, dt * 0.45); g.fillStyle = '#fff'; g.fillRect(0, 0, 256, 160); g.globalAlpha = 1; }
+  const HW = 0.66, HH = 0.40;
+  const toC = (zp, r, a) => { const z = zp - r * Math.cos(a), up = -0.58 + r * Math.sin(a); return [(z + HW) / (2 * HW) * 256, (1 - (up / HH + 1) / 2) * 160]; };
+  [[0.46, 0.9], [-0.24, 0.9]].forEach(([zp, L], i) => {
+    const a0 = WMASK.prev[i], a1 = WIPE.a * WIPE.k[i]; WMASK.prev[i] = a1;
+    if (Math.abs(a1 - a0) < 1e-4) return;
+    const r0 = L * 0.2, r1 = L * 1.0, N = 4;
+    g.fillStyle = '#000'; g.beginPath();
+    for (let k = 0; k <= N; k++){ const p = toC(zp, r1, a0 + (a1 - a0) * k / N); k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }
+    for (let k = N; k >= 0; k--){ const p = toC(zp, r0, a0 + (a1 - a0) * k / N); g.lineTo(p[0], p[1]); }
+    g.closePath(); g.fill();
+  });
+  WMASK.tex.needsUpdate = true;
+}
 (function beads(){
   const C = [0.54, 1.18, 0.0], u = [-Math.sin(55.1*D2R), Math.cos(55.1*D2R), 0], hw = 0.66, hh = 0.40;
   const P = (sw, sh) => [C[0] + u[0]*sh*hh, C[1] + u[1]*sh*hh, C[2] + sw*hw];
@@ -3366,7 +3428,7 @@ function updateTraffic(dt){
         !traffic.some(o => o !== c && !o.onc && Math.abs(o.z - LANES[pLn]) < 2.2 && Math.abs(o.x - c.x) < 14 + o.hl)){
       c.lc = 1; c.tgt = pLn; c.ph = 0.8; c.ind = Math.sign(LANES[pLn] - LANES[c.lane]); c.cut = true;
     }
-    if (c.lc === 1 && HONK.on && c.tgt === pLn && dxp > 2 && dxp < 26 && !P.onExit){   /* only a car pulling in right in front of you */
+    if (c.lc === 1 && HONK.on && c.tgt === pLn && dxp > 0 && dxp - c.hl - 2.3 < 5 && !P.onExit){   /* only a car pulling in right on your nose - about a car length between you (10-01) */
       /* you sounded the horn: it gives up and goes back */
       if (c.ph <= 2.0){ c.lc = 0; c.ind = 0; }
       else {
@@ -3530,6 +3592,7 @@ const ANOMALIES = {
   53: 'メーターの針が速度と関係なくぐるぐる回り続けている',
   54: 'トンネルの屋根が無く、星空が見えている',
   55: 'バスの窓が全部割れて、カーテンや人やゴミが外に出てくる',
+  56: 'ワイパーが三色団子の串になっている',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
   46: 'トンネルの壁がストリートアート（スプレーの落書き）だらけ',
@@ -3548,7 +3611,7 @@ let noInd = false;                     // anomaly 29, while it is showing
    so they count as level 4. */
 const DIFF = [
   [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52, 54, 55],
-  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51, 53],
+  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51, 53, 56],
   [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
@@ -3748,7 +3811,7 @@ function spawnBiker(){
    with the siren going. Cars ahead of it in its lane pull over if they can. */
 function spawnPatrol(){
   const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 1 ? 2 : 1;
-  Object.assign(PT, { on: true, lane, z: LANES[lane], x: pose.x - 100, v: P.v + 12, mode: anomaly,
+  Object.assign(PT, { on: true, blockT: 0, lane, z: LANES[lane], x: pose.x - 100, v: P.v + 12, mode: anomaly,
                       mesh: anomaly === 32 ? patrols.inverted : anomaly === 31 ? patrols.blue : patrols.normal,
                       sx: anomaly === 34 ? 2.2 : anomaly === 35 ? 0.2 : 1 });   /* a limousine / squashed flat */
 }
@@ -4088,7 +4151,9 @@ function step(dt){
     if (x0 < TUN_A + 60 && P.x >= TUN_A + 60 && !P.home) spawnPatrol();
     if (x0 < FORK && P.x >= FORK){
       const took = P.d < -5.4;
-      const ptBehind = (PT.on && PT.x < pose.x - 2 && !P.home) || DBG.mode === 'e6';   /* 09-30: it never got past you (or the debug button for ending 6) */
+      /* 10-01: only if you really kept it stuck behind you (in its way for 8 s or more) - a patrol car
+         that simply had not caught you up yet no longer counts */
+      const ptBehind = (PT.on && PT.x < pose.x - 2 && (PT.blockT || 0) > 8 && !P.home) || DBG.mode === 'e6';   /* 09-30: it never got past you (or the debug button for ending 6) */
       judgeAtFork(took); endZone();
       if (ptBehind) startArrest();
       if (took){ P.onExit = true; P.s = P.x - FORK; P.d -= DECEL_C; }
@@ -4133,6 +4198,7 @@ function step(dt){
        you in another lane. (Swerve into it yourself and it is still a crash.) */
     const dxp = pose.x - PT.x;
     if (!P.onExit && Math.abs(pose.z - PT.z) < 2.4 && dxp > 0 && dxp < 50){
+      PT.blockT = (PT.blockT || 0) + dt;   /* 10-01: how long you have actually been in its way */
       target = Math.min(target, Math.max(0, P.v - 1 + (dxp - 14) * 0.35));
       if (Math.abs(LANES[PT.lane] - PT.z) < 0.05){
         const pLane = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2);
@@ -4230,6 +4296,7 @@ function step(dt){
      start of a run, just behind 0) to the fork - not only from the tunnel, as it was (09-28) */
   noInd = anomaly === 29 && !P.onExit && (P.x >= ZSIGN_X - 20 || (P.x >= ZSIGN_X - SECTION - 20 && P.x < FORK + 80));
   rainOn = (!inTunnel || rainInTun) && rainAmt > 0.01;
+  updateWipers(dt, rainOn && rainAmt > 0.2); wipeTrace(dt, rainOn);
   const kanji = anomaly === 21 && !P.onExit && P.x > TUN_B && P.x < FORK + 80;
   rain.visible = rainOn && !kanji; kanjiRain.p.visible = rainOn && kanji;
   /* on the road home the rain eases off over the first 80 m */
