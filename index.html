@@ -68,6 +68,16 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 .tb.steer{width:84px;height:84px;font-size:24px;}
 .tb.brake{width:78px;height:68px;}
 .tb.accel{width:84px;height:124px;border-color:rgba(255,182,94,.45);color:var(--sodium);}
+#tWheel{position:relative;width:150px;height:150px;touch-action:none;}
+#tWheel[hidden]{display:none;}
+#tWheel .rim{position:absolute;inset:0;border-radius:50%;border:14px solid rgba(238,232,220,.32);background:rgba(10,14,20,.25);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:transform .05s linear;}
+#tWheel .rim::before{content:'';position:absolute;left:50%;top:-14px;width:8px;height:22px;margin-left:-4px;border-radius:4px;background:rgba(255,182,94,.8);}
+#tWheel.on .rim{border-color:rgba(255,182,94,.5);}
+#bHorn{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:50%;border:1px solid var(--glass-edge);
+  background:rgba(10,14,20,.6);color:var(--ink);font:700 14px/1 "BIZ UDPGothic",system-ui,sans-serif;touch-action:none;cursor:pointer;}
+#bHorn.on{background:rgba(255,182,94,.35);border-color:var(--sodium);}
+.tb.brake{width:96px;height:96px;font-size:17px;}
 .tb.on{background:rgba(255,182,94,.28);border-color:var(--sodium);}
 
 #toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);max-width:calc(100% - 32px);padding:14px 22px;border-radius:12px;
@@ -165,12 +175,10 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 <div id="rotate" hidden>横向きにすると見やすくなります</div>
 <div id="touch" hidden>
   <div class="grp">
-    <button id="bL" class="tb steer" type="button" aria-label="左へ">◀</button>
-    <button id="bR" class="tb steer" type="button" aria-label="右へ">▶</button>
+    <div id="tWheel" aria-label="ハンドル" hidden><div class="rim"></div><button id="bHorn" type="button" aria-label="クラクション">ホーン</button></div>
   </div>
   <div class="grp">
     <button id="bB" class="tb brake" type="button">ブレーキ</button>
-    <button id="bA" class="tb accel" type="button">アクセル</button>
   </div>
 </div>
 <div id="toast" hidden></div>
@@ -201,17 +209,16 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 </div>
 <div id="panel">
   <div class="sign intro" role="dialog" aria-labelledby="ttl">
-    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.3</span></h1>
+    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.4</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
-    <p class="rule warn">車にぶつかったら死ぬ。</p>
-    <p class="rule small" id="endLine">エンディングは全部で5つ。</p>
-    <p class="rule small" id="iosTip" hidden>iPhoneは「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
+    <p class="rule small" id="endLine">エンディングは全部で6つ。</p>
+    <p class="rule small" id="iosTip" hidden>iPhoneは横向きで。「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
-      <thead><tr><th></th><th>アクセル</th><th>ブレーキ</th><th>ハンドル</th></tr></thead>
+      <thead><tr><th></th><th>ブレーキ</th><th>ハンドル</th><th>クラクション</th></tr></thead>
       <tbody>
-        <tr class="desk"><th>キーボード</th><td>↑ / W</td><td>↓ / S</td><td>← → / A D</td></tr>
-        <tr class="desk"><th>パッド</th><td>RT / B</td><td>LT / A</td><td>左スティック</td></tr>
-        <tr class="touch"><th>スマホ</th><td>右下のボタン</td><td>その左</td><td>左下 ◀ ▶</td></tr>
+        <tr class="desk"><th>キーボード</th><td>↓ / S</td><td>← → / A D</td><td>↑ / H</td></tr>
+        <tr class="desk"><th>パッド</th><td>LT / A</td><td>左スティック</td><td>RT / B</td></tr>
+        <tr class="touch"><th>スマホ</th><td>右下</td><td>画面のハンドルに指を置いて左右</td><td>ハンドルの真ん中</td></tr>
       </tbody>
     </table>
     <button id="start" type="button" disabled>読み込み中…</button>
@@ -224,7 +231,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
       <div class="dbg-row"><select id="dbgSel" aria-label="確認する異変"></select><button id="dbgGo" type="button">この異変で走る</button></div>
       <button id="dbg8a" type="button">8番エリア → エンディング（異変なし＝本線が正解）</button>
       <button id="dbg8b" type="button">8番エリア → エンディング（異変あり＝出口が正解）</button>
-      <div class="dbg-row"><button id="dbgE1" type="button">エンディング1</button><button id="dbgE2" type="button">2</button><button id="dbgE3" type="button">3</button><button id="dbgE4" type="button">4</button><button id="dbgE5" type="button">5</button></div>
+      <div class="dbg-row"><button id="dbgE1" type="button">エンディング1</button><button id="dbgE2" type="button">2</button><button id="dbgE3" type="button">3</button><button id="dbgE4" type="button">4</button><button id="dbgE5" type="button">5</button><button id="dbgE6" type="button">6</button></div>
     </div>
   </div>
 </div>
@@ -295,6 +302,7 @@ const ONC = [14.4, 17.9, 21.4];
 const LM_Z0 = -640, LM_Z1 = 30, LMW = 840, LMH = 680;   // reaches down the hillside to the town
 const SAFE = 18.0;                     // 65 km/h: below this the car behind starts closing in
 const VMAX = 39.0;                     // 140 km/h
+const CRUISE = 27.8;                   // 100 km/h: where the car settles by itself (no accelerator, 09-30)
 const SODIUM = [1.0, 0.64, 0.30], TLIGHT = [1.0, 0.60, 0.26];
 
 function groundY(z){                   // the highway runs along a ridge; a long hillside drops to the town
@@ -588,7 +596,11 @@ void main(){
   }
   vec3 alb = vCol;
   #ifdef ND_MAP
-    alb *= texture2D(uMap, vUv).rgb;
+    vec4 tx = texture2D(uMap, vUv);
+    #ifdef ND_ALPHA
+      if (tx.a < 0.5) discard;
+    #endif
+    alb *= tx.rgb;
   #endif
   float lx = mod(vW.x, uSection);
   vec2 lu = vec2(lx / uSection, (vW.z - uLMz.x) * uLMz.y);
@@ -870,6 +882,25 @@ function drawToll(){
   tollTex.needsUpdate = true;
 }
 
+/* road markings before the fork (09-30, after the user's photos): 「出口」 with an arrow bending left
+   in the exit lane, 「本線」 with a straight arrow in each main lane. White paint on a transparent
+   canvas; the arrow is at the top (furthest away), the first character next, the second nearest. */
+function roadWordTex(words, arrow){
+  const c = signCanvas(256, 768), g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 768); g.fillStyle = '#fff';
+  g.save(); g.translate(128, 128);
+  if (arrow === 'left'){ g.rotate(-0.55); }   /* (canvas v runs down the road, so this leans it to the driver's left) */
+  g.fillRect(-18, -20, 36, 120);
+  g.beginPath(); g.moveTo(0, -110); g.lineTo(-62, -10); g.lineTo(62, -10); g.closePath(); g.fill();
+  g.restore();
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 220px ${SIGNFONT}`;
+  g.fillText(words[0], 128, 400); g.fillText(words[1], 128, 640);
+  const t = new THREE.CanvasTexture(c); return t;
+}
+const exitWordTex = roadWordTex('出口', 'left'), mainWordTex = roadWordTex('本線', 'up');
+const mapMatA = tex => new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: tex } }), defines: { ND_MAP: '', ND_ALPHA: '' },
+  vertexShader: WORLD_VS, fragmentShader: WORLD_FS, side: THREE.DoubleSide });
+
 /* 「ETC 20km/h」 - the sign before every toll gate (09-29) */
 const etcCv = signCanvas(256, 320), etcTex = new THREE.CanvasTexture(etcCv);
 (function drawEtc(){
@@ -883,6 +914,15 @@ const etcCv = signCanvas(256, 320), etcTex = new THREE.CanvasTexture(etcCv);
   etcTex.needsUpdate = true;
 })();
 /* one on a post: (x, y, z) ground point, th the road's heading there */
+/* 10-01: the lane up to each ETC booth painted like the photo - blue, crossed with white bars */
+function etcLanePaint(b, pt, s0, s1, w){
+  const BLUE = [0.2, 0.5, 0.82], WH = [0.93, 0.94, 0.95];
+  for (let s = s0; s < s1 - 1e-6; s += 2){
+    const e = Math.min(s + 2, s1);
+    b.quad(pt(s, -w, 0.07), pt(e, -w, 0.07), pt(e, w, 0.07), pt(s, w, 0.07), BLUE, 0.06);
+  }
+  for (let s = s0 + 1; s < s1 - 1; s += 2.2) b.quad(pt(s, -w + 0.3, 0.1), pt(s + 0.6, -w + 0.3, 0.1), pt(s + 0.6, w - 0.3, 0.1), pt(s, w - 0.3, 0.1), WH, 0.12);
+}
 function etcSign(b, pb, x, y, z, th){
   const fx = Math.cos(th), fz = Math.sin(th), lx = -fz, lz = fx;          /* forward, and the right-hand side */
   const P3 = (d, h) => [x + lx * d, y + h, z + lz * d];
@@ -959,7 +999,7 @@ function buildSection(){
   const NCH = 6, CH = SECTION / NCH;
   const ch = Array.from({ length: NCH }, () => new B());
   const Wb = x => ch[clamp(Math.floor(x / CH), 0, NCH - 1)];
-  const g0etc = [];
+  const g0etc = [], exitPaintB = new B(), mainPaintB = new B();
   const orbCamB = new B(), tollB = new B(), signExit = new B(), signMain = new B(), chev = new B(), signZone = new B(), tunPlate = new B(), tunPanels = new B();
   const GL = [];
   const glow = (x, y, z, c, k, size) => GL.push(x, y, z, c[0]*k, c[1]*k, c[2]*k, size);
@@ -1093,6 +1133,26 @@ function buildSection(){
     glow(x - 0.25, y0 + 1.3, (z0 + z1)/2, [0.75, 1.0, 0.85], 0.16, 9.75);   /* the wash of light on the face */
   }
 
+  /* 09-30: the lane markings before the fork, a blue exit lane and green posts at the gore */
+  {
+    const word = (b, xNear, zc, len, wid) => b.quad([xNear, 0.08, zc - wid/2], [xNear, 0.08, zc + wid/2], [xNear + len, 0.08, zc + wid/2], [xNear + len, 0.08, zc - wid/2], [1, 1, 1], 0.3, 1, [0, 0, 1, 0, 1, 1, 0, 1]);
+    for (const x of [FORK - 150, FORK - 75]){
+      word(exitPaintB, x, DECEL_C, 20, 2.4);
+      for (const zc of LANES) word(mainPaintB, x, zc, 20, 2.4);
+    }
+    /* the exit lane painted blue for its last stretch, with white chevrons */
+    const bb = Wb(FORK - 60), BLUE = [0.16, 0.42, 0.72];
+    bb.quad([FORK - 120, 0.04, DECEL_C - 1.55], [FORK - 120, 0.04, DECEL_C + 1.55], [FORK - 8, 0.04, DECEL_C + 1.55], [FORK - 8, 0.04, DECEL_C - 1.55], BLUE, 0.05);
+    for (let x = FORK - 112; x < FORK - 20; x += 16){
+      bb.quad([x, 0.043, DECEL_C - 1.2], [x, 0.043, DECEL_C - 0.9], [x + 3, 0.043, DECEL_C + 0.15], [x + 3, 0.043, DECEL_C - 0.15], [0.95, 0.95, 0.95], 0.08);
+      bb.quad([x, 0.043, DECEL_C + 0.9], [x, 0.043, DECEL_C + 1.2], [x + 3, 0.043, DECEL_C + 0.15], [x + 3, 0.043, DECEL_C - 0.15], [0.95, 0.95, 0.95], 0.08);
+    }
+    /* green posts along the line between exit lane and main line, over the last 45 m */
+    for (let x = FORK - 45; x < FORK + 2; x += 3){
+      const pb = Wb(x); pb.box(x, 0.4, -5.3, 0.08, 0.8, 0.08, [0.18, 0.6, 0.3], 0.1);
+      pb.box(x, 0.62, -5.3, 0.085, 0.06, 0.085, [0.9, 0.9, 0.9], 0.3); pb.box(x, 0.45, -5.3, 0.085, 0.06, 0.085, [0.9, 0.9, 0.9], 0.3);
+    }
+  }
   /* gore nose */
   const NX = FORK + 31;
   Wb(NX).box(NX + 0.9, 0.5, -6.25, 1.8, 1.0, 0.8, COL.cushion, 0.1);
@@ -1294,6 +1354,7 @@ function buildSection(){
     /* the toll gate (09-28): the road opens out into a plaza of five booths under a canopy; you
        go through the middle one. Name sign and LED board on top, like the photo. */
     if (HP.tollS > 0){
+      etcLanePaint(Wb(pathPose(HP, HP.tollS, 0, {}).x), hat, HP.tollS - 36, HP.tollS - 7, 2.2);
       const TS = HP.tollS, S0 = TS - 45, S1 = TS + 35;
       const W = s => 3 + 11.8 * sm((s - S0) / 30) * sm((S1 - s) / 25);
       for (let s = S0; s < S1; s += ST){
@@ -1432,6 +1493,7 @@ function buildSection(){
     tollB.quad(ex(fs, -2.1, 5.52), ex(fs, 2.1, 5.52), ex(fs, 2.1, 6.3), ex(fs, -2.1, 6.3), [1,1,1], 0.45, 1, [0,v0, 1,v0, 1,v1, 0,v1]);
   };
   tollRamp(EX_TOLL, 'exit');
+  { const pt = (s, d, dy) => { const q = exPose(s, d, {}); return [q.x, q.y + dy, q.z]; }; etcLanePaint(Wb(exPose(EX_TOLL, 0, {}).x), pt, EX_TOLL - 34, EX_TOLL - 6, 1.5); }
   { /* the 「ETC 20km/h」 signs: on the ramp before its gate, and on the way home before that one */
     const eb = new B(), q = exPose(EX_TOLL - 30, 3.0, {});
     etcSign(eb, Wb(q.x), q.x, q.y, q.z, q.th);
@@ -1451,6 +1513,7 @@ function buildSection(){
   g.add(new THREE.Mesh(signExit.geo(), mapMat(exitTex)));
   g.add(new THREE.Mesh(tollB.geo(), mapMat(tollTex)));
   for (const eb of g0etc) g.add(new THREE.Mesh(eb.geo(), mapMat(etcTex)));
+  g.add(new THREE.Mesh(exitPaintB.geo(), mapMatA(exitWordTex)), new THREE.Mesh(mainPaintB.geo(), mapMatA(mainWordTex)));
   { const m = new THREE.Mesh(orbCamB.geo(), worldMat); m.name = 'orbCams'; g.add(m); }
   g.add(new THREE.Mesh(signMain.geo(), mapMat(mainTex)));
   g.add(new THREE.Mesh(chev.geo(), mapMat(chevTex)));
@@ -1575,6 +1638,7 @@ const mainToll = (() => {
   const fs = X - 4.06, v1 = 1 - 832/1024;
   tb.quad([fs, 5.52, -2.1], [fs, 5.52, 2.1], [fs, 6.3, 2.1], [fs, 6.3, -2.1], [1, 1, 1], 0.45, 1, [0, 0, 1, 0, 1, v1, 0, v1]);
   const eb = new B(); etcSign(eb, b, X - 50, 0, 6.3, 0);
+  for (const lz of [-3.5, 0, 3.5]) etcLanePaint(b, (s, d, dy) => [s, dy, lz + d], X - 36, X - 7, 1.45);
   g.add(new THREE.Mesh(b.geo(), worldMat), new THREE.Mesh(tb.geo(), mapMat(tollTex)), new THREE.Mesh(eb.geo(), mapMat(etcTex)));
   const bars = [-3.5, 0, 3.5].map(lz => {
     const piv = new THREE.Group(), arm = new THREE.Group(), ab = new B();
@@ -1665,7 +1729,7 @@ function updateMonsters(dt, tunX){
     M.m.position.set(M.x, Math.sin(Math.PI * Math.min(1, M.t)) * 0.12, M.z);
     M.m.rotation.y = M.yaw;
     /* hit one and it is a crash; the other cars go straight through them */
-    if (!P.dead && !P.onExit && !P.home && Math.abs(M.x + tunX - pose.x) < 2.3 + 0.45 && Math.abs(M.z - pose.z) < 0.92 + 0.45) die('衝突した');
+    if (!P.dead && !P.onExit && !P.home && Math.abs(M.x + tunX - pose.x) < 2.3 + 0.45 && Math.abs(M.z - pose.z) < 0.92 + 0.45) bump(M.x + tunX, M.z, 0, 0.45, 0.45);
   }
 }
 /* anomaly 43, reworked (09-30): no more rows of exits - the one emergency exit in your bore has
@@ -2502,12 +2566,18 @@ const kanjiRain = (() => {
 })();
 
 /* ---------------------------------------------------------------- traffic */
-const PAINT = [[0.62,0.63,0.66], [0.08,0.09,0.10], [0.55,0.12,0.10], [0.20,0.26,0.36], [0.75,0.74,0.70], [0.36,0.34,0.30]];
+const PAINT = [[0.62,0.63,0.66], [0.15,0.16,0.18], [0.55,0.12,0.10], [0.20,0.26,0.36], [0.75,0.74,0.70], [0.36,0.34,0.30]];
 function carGeo(paint){
   const b = new B(), L = 4.5;
   b.box(0, 0.52, 0, L, 0.6, 1.78, paint); b.box(-0.3, 1.03, 0, 2.3, 0.46, 1.58, [0.05, 0.055, 0.065]);
   for (const [wx, wz] of [[1.45,0.8],[1.45,-0.8],[-1.45,0.8],[-1.45,-0.8]]) b.box(wx, 0.32, wz, 0.64, 0.64, 0.24, [0.03, 0.03, 0.035]);
   for (const z of [0.62, -0.62]){ b.box(-L/2 - 0.015, 0.74, z, 0.05, 0.13, 0.36, [1, 0.1, 0.07], 1.6); b.box(L/2 + 0.015, 0.64, z, 0.05, 0.12, 0.32, [1, 0.96, 0.86], 1.5); }
+  /* 09-30: so a dark car still reads as a car and not two floating lamps - a lit number plate
+     front and back, a pale bumper line, and a sheen along the roof edges */
+  b.box(-L/2 - 0.02, 0.5, 0, 0.02, 0.16, 0.34, [0.9, 0.9, 0.84], 0.55); b.box(L/2 + 0.02, 0.42, 0, 0.02, 0.14, 0.32, [0.85, 0.85, 0.8], 0.25);
+  b.box(-L/2 - 0.01, 0.33, 0, 0.03, 0.05, 1.7, [0.32, 0.33, 0.36], 0.05);
+  b.box(-L/2 + 0.05, 0.82, 0, 0.04, 0.03, 1.72, [0.4, 0.42, 0.46], 0.08);
+  for (const z of [0.8, -0.8]) b.box(-0.3, 1.27, z, 2.2, 0.03, 0.03, [0.45, 0.47, 0.5], 0.1);
   return b.geo();
 }
 function truckGeo(paint){
@@ -2852,6 +2922,122 @@ function makePatrol(inverted, bar){
   return m;
 }
 const patrols = { normal: makePatrol(false, [0.9, 0.08, 0.06]), inverted: makePatrol(true, [0.9, 0.08, 0.06]), blue: makePatrol(false, [0.1, 0.3, 1.0]) };
+/* 09-30: keep the patrol car stuck behind you all the way to the fork (never letting it by) and
+   the police are waiting: a line of patrol cars across the road ahead, facing you, lights going.
+   The car stops, the loudspeaker says 「はい、止まりなさい」, and that is the end - 検挙, game over. */
+const ARREST = { on: false, t: 0, stopT: 0, said: false, bx: 0, bs: 0, onExit: false, g: null };
+(function buildBlockade(){
+  const g = new THREE.Group();
+  for (let i = 0; i < 4; i++){ const m = patrols.normal.clone(); m.visible = true; g.add(m); }
+  g.visible = false; scene.add(g); ARREST.g = g;
+})();
+function startArrest(){
+  if (ARREST.cops){ for (const c of ARREST.cops) scene.remove(c.o.g); ARREST.cops = null; }
+  ARREST.on = true; ARREST.t = 0; ARREST.stopT = 0; ARREST.said = false; ARREST.onExit = P.onExit;
+  if (P.onExit){ ARREST.bs = P.s + 150; }
+  else ARREST.bx = P.x + 190;
+  const cars = ARREST.g.children, zs = [-5.2, -1.8, 1.8, 5.2];
+  cars.forEach((m, i) => {
+    let x, z, th;
+    if (ARREST.onExit){ const q = exPose(ARREST.bs, (i - 1.5) * 1.3, {}); x = q.x; z = q.z; th = q.th; m.visible = i > 0 && i < 3; }
+    else { x = ARREST.bx + (i % 2) * 1.5; z = zs[i]; th = 0; m.visible = true; }
+    m.position.set(x, 0, z); m.rotation.set(0, -th + Math.PI + (i - 1.5) * 0.25, 0);   /* nose toward you, a little splayed */
+  });
+  ARREST.g.visible = true;
+}
+function arrestStep(dt){
+  if (!ARREST.on) return;
+  ARREST.t += dt;
+  const gap = ARREST.onExit ? ARREST.bs - P.s : ARREST.bx - P.x;
+  P.v = Math.min(P.v, Math.max(0, (gap - 24) * 0.55));
+  if (!ARREST.onExit) for (const c of traffic){ if (c.onc || c.parked || Math.abs(c.z - pose.z) > 2.2 || c.x < pose.x) continue; const g = c.x - c.hl - (pose.x + 2.3); P.v = Math.min(P.v, Math.max(0, (g - 5) * 0.5)); }   /* and behind the queue */
+  if (PT.on){ PT.v = Math.min(PT.v, P.v); if (PT.x > pose.x - 14) PT.x = pose.x - 14; }
+  if (!ARREST.said && gap < 110){ ARREST.said = true; sayArrest(); }
+  if (P.v < 0.3){
+    ARREST.stopT += dt;
+    if (ARREST.stopT > 0.4 && !ARREST.cops) spawnCops();
+    if (ARREST.stopT > 12 && !P.ended){ P.endingNo = 6; P.late = true; showEnding(); }   /* 10-01: ending 6 - 検挙 */
+  }
+  if (ARREST.cops) moveCops(dt);
+}
+/* ten officers pile out of the patrol cars and close round you */
+function spawnCops(){
+  ARREST.cops = [];
+  const cars = ARREST.g.children.filter(m => m.visible), th = pose.th || 0, cs = Math.cos(th), sn = Math.sin(th);
+  for (let i = 0; i < 10; i++){
+    const o = makeOfficer(), car = cars[i % cars.length];
+    const a = (i / 10) * Math.PI * 2 + 0.3, lx = Math.cos(a) * 3.6, lz = Math.sin(a) * 2.3;   /* a ring round the car */
+    const tx = pose.x + lx * cs - lz * sn, tz = pose.z + lx * sn + lz * cs;
+    o.g.position.set(car.position.x + (Math.random() - 0.5) * 2, pose.y, car.position.z + (Math.random() - 0.5) * 2.4);
+    o.g.visible = true;
+    const spot = { x: tx, z: tz }; pushOut(spot, copObstacles());
+    ARREST.cops.push({ o, tx: spot.x, tz: spot.z, delay: i * 0.25 + Math.random() * 0.3, ph: Math.random() * 6 });
+  }
+}
+/* 10-01: they walk round the cars (yours, the queue, their own patrol cars), not through them,
+   and keep a little apart from each other */
+function copObstacles(){
+  const obs = [{ x: pose.x, z: pose.z, a: pose.th || 0, hl: 2.3, hw: 0.95 }];
+  for (const c of traffic) if (!c.onc && !c.parked && Math.abs(c.x - pose.x) < 60) obs.push({ x: c.x, z: c.z, a: c.th || 0, hl: c.hl, hw: c.hw });
+  for (const m of ARREST.g.children) if (m.visible) obs.push({ x: m.position.x, z: m.position.z, a: -m.rotation.y, hl: 2.3, hw: 0.9 });
+  if (PT.on) obs.push({ x: PT.x, z: PT.z, a: 0, hl: 2.3 * PT.sx, hw: 0.9 });
+  return obs;
+}
+function pushOut(p, obs){
+  for (const o of obs){
+    const ca = Math.cos(o.a), sa = Math.sin(o.a), dx = p.x - o.x, dz = p.z - o.z;
+    let lx = dx * ca + dz * sa, lz = -dx * sa + dz * ca;
+    const ex = o.hl + 0.45, ez = o.hw + 0.45;
+    if (Math.abs(lx) < ex && Math.abs(lz) < ez){
+      if (ex - Math.abs(lx) < ez - Math.abs(lz)) lx = Math.sign(lx || 1) * ex; else lz = Math.sign(lz || 1) * ez;
+      p.x = o.x + lx * ca - lz * sa; p.z = o.z + lx * sa + lz * ca;
+    }
+  }
+}
+function moveCops(dt){
+  const obs = copObstacles();
+  for (const c of ARREST.cops){
+    if ((c.delay -= dt) > 0) continue;
+    const p = c.o.g.position; let dx = c.tx - p.x, dz = c.tz - p.z; const d = Math.hypot(dx, dz);
+    const moving = d > 0.3;
+    if (moving){
+      /* head for the spot, sidestepping each other */
+      let vx = dx / d, vz = dz / d;
+      for (const o of ARREST.cops){ if (o === c) continue; const q = o.o.g.position, ox = p.x - q.x, oz = p.z - q.z, od = Math.hypot(ox, oz); if (od < 0.8 && od > 1e-3){ vx += ox / od * 0.8; vz += oz / od * 0.8; } }
+      const vl = Math.hypot(vx, vz) || 1, s = Math.min(d, 3.0 * dt);
+      const ox0 = p.x, oz0 = p.z;
+      p.x += vx / vl * s; p.z += vz / vl * s;
+      pushOut(p, obs);                                              /* slides along a car's side instead of walking into it */
+      const mx = p.x - ox0, mz = p.z - oz0;
+      if (Math.hypot(mx, mz) > 1e-4) c.o.g.rotation.y = -Math.atan2(mz, mx);
+    }
+    else c.o.g.rotation.y = -Math.atan2(pose.z - p.z, pose.x - p.x);        /* then they all face you */
+    c.ph += dt * 9; const sw = moving ? Math.sin(c.ph) : 0;
+    c.o.legs[0].rotation.z = 0.6 * sw; c.o.legs[1].rotation.z = -0.6 * sw;
+    c.o.arms[0].rotation.z = -0.5 * sw; c.o.arms[1].rotation.z = 0.5 * sw;
+  }
+}
+function sayArrest(){
+  try {
+    if (window.speechSynthesis && SND.on){
+      const u = new SpeechSynthesisUtterance('はい、とまりなさい。'); u.lang = 'ja-JP'; u.rate = 0.9; u.pitch = 0.8; u.volume = 1;
+      speechSynthesis.cancel(); speechSynthesis.speak(u);
+    }
+  } catch (_) {}
+}
+function arrestDraw(){
+  if (!ARREST.on) return;
+  const ph = (clock * 2.2) % 1;
+  for (const m of ARREST.g.children){
+    if (!m.visible) continue;
+    const p = m.position, th = m.rotation.y;
+    const bx = p.x + Math.cos(th) * -0.3, bz = p.z - Math.sin(th) * -0.3;
+    dglow(bx, 1.45, bz + (ph < 0.5 ? 0.35 : -0.35), 1.0, 0.08, 0.05, 1.3);
+    dglow(bx, 1.45, bz, 0.4, 0.03, 0.02, 5);
+    dglow(p.x + Math.cos(th) * 2.3, 0.62, p.z - Math.sin(th) * 2.3, 1, 0.95, 0.85, 1.2);   /* headlights on you */
+  }
+}
+
 
 /* the ones waiting at the gate in the good ending: wife and child, waving */
 const family = (() => {
@@ -3147,6 +3333,12 @@ function updateTraffic(dt){
     if (KT.on && !leaving && Math.abs(KT.z - c.z) < 2.2 && KT.x > c.x){ const g = KT.x - c.x - 5.5 - c.hl; if (g < gap){ gap = g; lv = KT.v; } }
     if (PT.on && Math.abs(PT.z - c.z) < 2.2 && PT.x > c.x){ const g = PT.x - c.x - 2.3 * PT.sx - c.hl; if (g < gap){ gap = g; lv = PT.v; } }
     let want = c.vPref;
+    /* 09-30: the police roadblock - everyone queues up before it, braking in good time, and the
+       cars behind stop behind whoever is in front (you included) instead of running into them */
+    if (ARREST.on && !ARREST.onExit && !c.onc){
+      if (c.x < ARREST.bx){ const gb = ARREST.bx - 3 - c.x - c.hl; want = Math.min(want, Math.max(0, (gb - 4) * 0.3)); }
+      if (gap < 100) want = Math.min(want, Math.max(0, lv + (gap - 6) * 0.28));
+    }
     /* 09-29: at the main-line toll plaza they slow to 20 km/h through the ETC lanes too */
     if (P.home === 'main' && !c.onc){ const dx = nearTollM(c.x) - c.x; if (dx > -3 && dx < 80) want = Math.min(want, GATE_V + Math.max(0, dx - 22) * 0.35); }
     if (gap < 40) want = Math.min(want, lv + (gap - 12) * 0.25);
@@ -3155,17 +3347,37 @@ function updateTraffic(dt){
     const z0 = c.z;
     c.x += c.v * dt;
     /* a patrol car closing from behind in your lane: move over now (trucks too), away from its lane */
-    if (c.lc === 0 && PT.on && !c.stand && !(c === BW.bus && BW.placed) && Math.abs(c.z - PT.z) < 2 && c.x > PT.x && c.x - PT.x < 90){
+    if (c.lc === 0 && PT.on && !ARREST.on && !c.stand && !(c === BW.bus && BW.placed) && Math.abs(c.z - PT.z) < 2 && c.x > PT.x && c.x - PT.x < 90){
       for (const dir of [c.lane === 0 ? 1 : -1, c.lane === 0 ? -1 : 1]){
         const tl = c.lane + dir;
         if (tl < 0 || tl > 2 || tl === PT.lane) continue;
         if (laneClear(tl, c.x, 20, 14, c)){ c.lc = 1; c.tgt = tl; c.ph = 1.2; c.ind = Math.sign(LANES[tl] - LANES[c.lane]); break; }
       }
     }
+    if (c.noCut > 0) c.noCut -= dt;
+    if (ARREST.on && c.lc === 1 && c.ph <= 2.0){ c.lc = 0; c.ind = 0; }   /* at the roadblock nobody starts changing lanes */
+    /* 09-30: now and then a car just ahead in the next lane cuts into yours - indicator first, so
+       you have a moment to lean on the horn */
+    const pLn = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), dxp = c.x - pose.x;
+    if (c.lc === 0 && !ARREST.on && !P.onExit && !P.home && !c.truck && !c.stand && !c.line && !(c.noCut > 0) && Math.abs(c.lane - pLn) === 1 &&
+        dxp > 6 && dxp < 24 && Math.random() < dt * 0.05 &&
+        !traffic.some(o => o !== c && !o.onc && Math.abs(o.z - LANES[pLn]) < 2.2 && Math.abs(o.x - c.x) < 14 + o.hl)){
+      c.lc = 1; c.tgt = pLn; c.ph = 0.8; c.ind = Math.sign(LANES[pLn] - LANES[c.lane]); c.cut = true;
+    }
+    if (c.lc === 1 && HONK.on && c.tgt === pLn && dxp > 2 && dxp < 26 && !P.onExit){   /* only a car pulling in right in front of you */
+      /* you sounded the horn: it gives up and goes back */
+      if (c.ph <= 2.0){ c.lc = 0; c.ind = 0; }
+      else {
+        const t = sm((c.ph - 2.0) / 3.2), back = 1 - t;
+        let lo = 0, hi = 1; for (let k = 0; k < 18; k++){ const m = (lo + hi) / 2; if (sm(m) < back) lo = m; else hi = m; }
+        const was = c.lane; c.lane = c.tgt; c.tgt = was; c.ph = 2.0 + 3.2 * lo; c.ind = Math.sign(LANES[c.tgt] - LANES[c.lane]);
+      }
+      c.noCut = 12; c.timer = 20 + Math.random() * 10; c.cut = false;
+    }
     if (c.lc === 0){
       c.timer -= dt * (noInd ? 3 : 1);        /* anomaly 29: they change lanes more, so you see it */
       const blocked = gap < 50 && lv < c.vPref - 2.5;
-      if ((blocked || c.timer <= 0) && !c.truck && !c.stand && !c.line && !(P.home === 'main' && Math.abs(c.x - nearTollM(c.x)) < 45)){
+      if ((blocked || c.timer <= 0) && !ARREST.on && !c.truck && !c.stand && !c.line && !(P.home === 'main' && Math.abs(c.x - nearTollM(c.x)) < 45)){
         const first = Math.random() < 0.5 ? -1 : 1;
         for (const dir of [first, -first]){
           const tl = c.lane + dir;
@@ -3202,10 +3414,12 @@ function updateTraffic(dt){
 
 /* ---------------------------------------------------------------- input */
 const keys = new Set();
+/* the horn (09-30). Held = sounding. A car cutting in on you backs off when you sound it. */
+const HONK = { on: false, prev: false };
 addEventListener('keydown', e => { if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code) && running) e.preventDefault(); keys.add(e.code); });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
-const touch = { l: 0, r: 0, a: 0, b: 0 };
+const touch = { l: 0, r: 0, a: 0, b: 0, steer: 0, horn: 0 };
 function bindBtn(id, key){
   const el = $(id);
   el.addEventListener('pointerdown', e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} touch[key] = 1; el.classList.add('on'); });
@@ -3213,18 +3427,66 @@ function bindBtn(id, key){
   el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
   el.addEventListener('contextmenu', e => e.preventDefault());
 }
-bindBtn('bL', 'l'); bindBtn('bR', 'r'); bindBtn('bA', 'a'); bindBtn('bB', 'b');
+bindBtn('bB', 'b'); bindBtn('bHorn', 'horn');
+/* (the on-screen wheel icon below is kept but hidden: you hold the real one now) */
+/* 09-30: the on-screen wheel - put a finger on it and slide left / right; its middle is the horn */
+(function bindWheel(){
+  const el = $('tWheel'), rim = el.querySelector('.rim');
+  let id = null, x0 = 0;
+  el.addEventListener('pointerdown', e => {
+    if (e.target.id === 'bHorn') return;
+    e.preventDefault(); id = e.pointerId; x0 = e.clientX; try { el.setPointerCapture(id); } catch (_) {} el.classList.add('on');
+  });
+  el.addEventListener('pointermove', e => {
+    if (e.pointerId !== id) return;
+    touch.steer = clamp((e.clientX - x0) / 70, -1, 1); rim.style.transform = `rotate(${touch.steer * 100}deg)`;
+  });
+  const up = e => { if (e.pointerId !== id) return; id = null; touch.steer = 0; rim.style.transform = ''; el.classList.remove('on'); };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+  el.addEventListener('contextmenu', e => e.preventDefault());
+})();
+/* 09-30: on a touch screen you take hold of the car's own wheel - touch its rim and slide left or
+   right to steer, press its hub to sound the horn. (Found by projecting the 3D wheel onto the screen
+   as you touch; mouse works too.) */
+(function bindDirectWheel(){
+  const v = new THREE.Vector3(), c0 = new THREE.Vector3();
+  const toScr = (w, r) => { w.project(cam); return [(w.x + 1) / 2 * r.width + r.left, (1 - w.y) / 2 * r.height + r.top]; };
+  let id = null, mode = null, x0 = 0, rimPx = 100;
+  canvas.style.touchAction = 'none';
+  canvas.addEventListener('pointerdown', e => {
+    if (!running || P.dead) return;
+    const r = canvas.getBoundingClientRect();
+    wheelSpin.updateWorldMatrix(true, false);
+    const [cx, cy] = toScr(wheelSpin.getWorldPosition(c0), r);
+    const [ex, ey] = toScr(wheelSpin.localToWorld(v.set(0.185, 0, 0)), r);
+    const [hx, hy] = toScr(wheelSpin.localToWorld(v.set(0.065, 0, 0)), r);
+    rimPx = Math.hypot(ex - cx, ey - cy); const hubPx = Math.max(26, Math.hypot(hx - cx, hy - cy));
+    const d = Math.hypot(e.clientX - cx, e.clientY - cy);
+    if (d < hubPx){ mode = 'horn'; touch.horn = 1; }
+    else if (d < rimPx * 1.45){ mode = 'steer'; x0 = e.clientX; }
+    else return;
+    id = e.pointerId; e.preventDefault(); try { canvas.setPointerCapture(id); } catch (_) {}
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerId !== id || mode !== 'steer') return;
+    touch.steer = clamp((e.clientX - x0) / Math.max(50, rimPx * 0.9), -1, 1);
+  });
+  const up = e => { if (e.pointerId !== id) return; id = null; if (mode === 'horn') touch.horn = 0; else touch.steer = 0; mode = null; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up); canvas.addEventListener('lostpointercapture', up);
+})();
 function readInput(){
-  let thr = (keys.has('ArrowUp') || keys.has('KeyW')) ? 1 : 0;
+  let thr = 0;   /* 09-30: no accelerator - the car keeps its cruising speed by itself */
   let brk = (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('Space')) ? 1 : 0;
+  let horn = keys.has('KeyH') || keys.has('ArrowUp') || keys.has('KeyW') ? 1 : 0;
   let st = ((keys.has('ArrowRight') || keys.has('KeyD')) ? 1 : 0) - ((keys.has('ArrowLeft') || keys.has('KeyA')) ? 1 : 0);
-  thr = Math.max(thr, touch.a); brk = Math.max(brk, touch.b); st += touch.r - touch.l;
+  brk = Math.max(brk, touch.b); st += touch.steer; horn = Math.max(horn, touch.horn);
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const p of pads){ if (!p) continue;
     const ax = p.axes[0] || 0; if (Math.abs(ax) > 0.12) st += ax;
     /* accelerator on the left trigger (and B), brake on the right trigger (and A) - as asked */
-    thr = Math.max(thr, p.buttons[7] ? p.buttons[7].value : 0, p.buttons[1] && p.buttons[1].pressed ? 1 : 0);
-    brk = Math.max(brk, p.buttons[6] ? p.buttons[6].value : 0, p.buttons[0] && p.buttons[0].pressed ? 1 : 0); }
+    brk = Math.max(brk, p.buttons[6] ? p.buttons[6].value : 0, p.buttons[0] && p.buttons[0].pressed ? 1 : 0);
+    if ((p.buttons[3] && p.buttons[3].pressed) || (p.buttons[5] && p.buttons[5].pressed) || (p.buttons[7] && p.buttons[7].value > 0.5) || (p.buttons[1] && p.buttons[1].pressed)) horn = 1; }
+  HONK.on = !!horn;
   return { thr, brk, st: clamp(st, -1, 1) };
 }
 
@@ -3528,6 +3790,26 @@ function endZone(){
 /* ---------------------------------------------------------------- rules */
 const crashEl = $('crash'), kmhEl = $('kmh');
 const PAN = { t: 0 };   // how long the view has rested on the house at the end
+/* 09-30: hitting something no longer kills you. You get knocked - thrown off sideways if it was a
+   glancing blow, slowed or shoved on if it was nose-to-tail - the other driver leans on the horn,
+   the view jolts, and it goes down as an accident on your record (for the endings) */
+const BUMP = { cool: 0, lat: 0, horn: 0, shake: 0 };
+function bump(ox, oz, ov, hl, hw){
+  const dx = pose.x - ox, dz = pose.z - oz;
+  const ovX = (2.3 + hl) - Math.abs(dx), ovZ = (0.92 + hw) - Math.abs(dz);
+  const s = Math.sign(dz) || (Math.random() < 0.5 ? -1 : 1);
+  if (ovZ < ovX * 0.8){                   /* from the side: pushed apart, and away */
+    P.d += s * (ovZ + 0.05);
+    BUMP.lat = s * (2.2 + 0.08 * Math.abs(P.v - ov));
+  } else if (dx < 0){                     /* you ran into its back: you lose your speed */
+    P.v = Math.min(P.v, Math.max(0, ov * 0.75)); BUMP.lat = s * 0.8;
+  } else {                                /* it ran into yours: shoved on */
+    P.v = Math.max(P.v, ov + 2.5); BUMP.lat = s * 0.8;
+  }
+  if (BUMP.cool > 0) return;
+  BUMP.cool = 1.2; BUMP.horn = 2.4; BUMP.shake = 0.35;
+  P.crashes++; sndBump();
+}
 function die(cause){ if (P.dead) return;
   /* 09-29: once through the main-line toll plaza on the way home nothing can crash you any more */
   if ((P.homeLeg && P.s > P.hp.tollS + 3) || (P.home === 'main' && !P.onExit && P.x > nearTollM(P.x) + 3)) return; P.dead = true; P.deadT = 0; P.crashes++; crashEl.hidden = false; sndCrash(P.rearHit); }
@@ -3624,13 +3906,13 @@ function showEnding(){
   P.ended = true; running = false;
   pauseBtn.hidden = true; touchEl.hidden = true;
   endEl.classList.toggle('late', P.late);
-  $('endNo').textContent = `エンディング ${P.endingNo} / 5`;
+  $('endNo').textContent = `エンディング ${P.endingNo} / 6`;
   if (!DBG.mode){ track(`ending-${P.endingNo}`); track("ending-all"); track(clearBand(P.runT)); }   /* ending-all: every ending, whichever (09-28) */
-  $('endTtl').textContent = ['', 'ただいま。', '……ただいま。', '……ただいま。', '……。', '……。'][P.endingNo];
+  $('endTtl').textContent = ['', 'ただいま。', '……ただいま。', '……ただいま。', '……。', '……。', '検挙。'][P.endingNo];
   $('endMiss').textContent = P.mistakes; $('endCrash').textContent = P.crashes;
   const t = Math.round(P.runT), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('endSecs').textContent = P.sections; $('endTime').textContent = mm + ':' + ss;
-  SHARE.text = `8番インターチェンジ　エンディング${P.endingNo}/5「${$('endTtl').textContent}」\n時間 ${$('endTime').textContent}・ミス${P.mistakes}回・事故${P.crashes}回`;
+  SHARE.text = `8番インターチェンジ　エンディング${P.endingNo}/6「${$('endTtl').textContent}」\n時間 ${$('endTime').textContent}・ミス${P.mistakes}回・事故${P.crashes}回`;
   endEl.hidden = false; $('again').focus();
   for (const k in touch) touch[k] = 0;
 }
@@ -3643,8 +3925,10 @@ for (const b of document.querySelectorAll('.xshare')) b.addEventListener('click'
   window.open('https://x.com/intent/post?' + q.toString(), '_blank', 'noopener');
   if (!DBG.mode) track('share');
 });
-function gameOver(){
+function gameOver(why){
   P.over = true; running = false;
+  $('overTtl').textContent = why || 'GAME OVER'; $('cont').hidden = !!why;   /* 検挙: no carrying on, title only */
+  setTimeout(() => { if (P.over && SND.ctx) SND.ctx.suspend(); }, 1500);   /* then silence, not a siren going for ever */
   crashEl.hidden = true; pauseBtn.hidden = true; touchEl.hidden = true;
   $('overCount').textContent = P.count;
   $('overCrash').textContent = P.crashes;
@@ -3684,13 +3968,19 @@ function resetRun(){
   sameMode = false; pendingRoll = false; lookA = 0; for (const f of flyers) f.on = false;
   DM.on = false; daimonji.show(false); for (const c of traffic) if (!c.onc) c.want = 'car';
   hideBiker(); PT.on = false; PT.mode = 0; KT.on = false; for (const c of cargo) c.on = false; MIR.k = 0; HELM.k = 0;
+  ARREST.on = false; ARREST.g.visible = false;
+  if (ARREST.cops){ for (const c of ARREST.cops) scene.remove(c.o.g); ARREST.cops = null; }
   playerPose(pose); seedTraffic(); rollAnomaly();
-  if (['8a', '8b', 'e1', 'e2', 'e3', 'e4', 'e5'].includes(DBG.mode)){
+  if (['8a', '8b', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6'].includes(DBG.mode)){
     P.count = 8;
     if (DBG.mode === 'e2') P.mistakes = 1;
     if (DBG.mode === 'e3') P.crashes = 1;
     if (DBG.mode === 'e4') P.runT = ENDING4_T + 60;
     if (DBG.mode === 'e5'){ P.runT = ENDING4_T + 60; P.crashes = 1; }
+    if (DBG.mode === 'e6'){   /* ending 6 (検挙): on the main line short of the fork, the patrol car stuck behind you */
+      Object.assign(P, { onExit: false, s: 0, x: FORK - 160, d: 0, v: 27, count: 3 }); playerPose(pose);   /* (not at 8, so the fork is not an ending of its own) */
+      Object.assign(PT, { on: true, x: pose.x - 16, z: 0, lane: 1, v: 27, sx: 1, mode: 0, mesh: patrols.normal });
+    }
     anomaly = DBG.mode === '8b' ? ANOM_IDS[Math.floor(Math.random() * ANOM_IDS.length)] : 0;
     applyAnomaly(); dbgHud();
   }
@@ -3706,7 +3996,8 @@ function step(dt){
     if (P.deadT > 1.6 && !P.over) restartAfterCrash();   /* 09-29: no menu - straight back to the start, the record kept */
   } else {
     const ah = P.homeLeg ? (P.hp === HOME_M || P.s > P.hp.tollS + 10) : (P.home === 'main' && !P.onExit && P.x > TOLL_M + 10);
-    if (inp.thr > 0 && !ah) P.v += 5.6 * inp.thr * (1 - P.v / VMAX) * dt;
+    /* 09-30: no accelerator - it gathers itself back up to cruising speed whenever you are off the brake */
+    if (inp.brk <= 0 && !ah && P.v < CRUISE) P.v += 5.6 * (1 - P.v / VMAX) * dt;
     if (inp.brk > 0 && !ah) P.v -= 11 * inp.brk * dt;
     P.v = clamp(P.v - (0.15 + 0.012 * P.v) * dt, 0, VMAX);
   }
@@ -3765,6 +4056,9 @@ function step(dt){
       if (gap < 14) P.v = Math.min(P.v, Math.max(0, c.v + (gap - 6) * 0.6));
     }
   }
+  arrestStep(dt);
+  if (BUMP.cool > 0) BUMP.cool -= dt; if (BUMP.horn > 0) BUMP.horn -= dt; if (BUMP.shake > 0) BUMP.shake -= dt;
+  P.d += BUMP.lat * dt; BUMP.lat *= Math.exp(-3.5 * dt);
   const [lo, hi] = lateralBounds(); P.d = clamp(P.d, lo, hi);
   const ds = P.v * dt;
   if (P.onExit){
@@ -3792,7 +4086,9 @@ function step(dt){
     if (x0 < TUN_A + 60 && P.x >= TUN_A + 60 && !P.home) spawnPatrol();
     if (x0 < FORK && P.x >= FORK){
       const took = P.d < -5.4;
+      const ptBehind = (PT.on && PT.x < pose.x - 2 && !P.home) || DBG.mode === 'e6';   /* 09-30: it never got past you (or the debug button for ending 6) */
       judgeAtFork(took); endZone();
+      if (ptBehind) startArrest();
       if (took){ P.onExit = true; P.s = P.x - FORK; P.d -= DECEL_C; }
     }
     /* the main-line road home: keep left into the opened lane */
@@ -3812,6 +4108,11 @@ function step(dt){
   updateTraffic(dt);
   for (const f of flyers){
     if (!f.on) continue;
+    /* 09-30 bug fix: once the zone they belonged to is over (the next anomaly has been drawn),
+       the ones still ahead of you used to hang on into the next zone - where there is no anomaly -
+       and got you sent back to 0 for taking the exit. Now they go at once if out of view, and
+       otherwise speed off and climb away into the rain */
+    if (anomaly !== 7){ if (unseen(f) || f.x - pose.x > 260){ f.on = false; continue; } f.v += 14 * dt; f.y += 3 * dt; }
     f.x += f.v * dt;
     /* once overhead it is out of every view: send it round again while the zone lasts */
     /* once you have passed under it and it is out of both views, send it round ahead again */
@@ -3900,22 +4201,22 @@ function step(dt){
     P.runT += dt;
     if (!P.onExit && !P.home) for (const c of traffic){          /* nothing can hit you once the way home is open */
       if (c.onc) continue;
-      if (Math.abs(c.x - pose.x) < 2.3 + c.hl && Math.abs(c.z - pose.z) < 0.92 + c.hw){ die('衝突した'); break; }
+      if (Math.abs(c.x - pose.x) < 2.3 + c.hl && Math.abs(c.z - pose.z) < 0.92 + c.hw){ bump(c.x, c.z, c.v, c.hl, c.hw); break; }
     }
-    if (!P.onExit && !P.home && KT.on && Math.abs(KT.x - pose.x) < 2.3 + 5.5 && Math.abs(KT.z - pose.z) < 0.92 + 1.23) die('衝突した');
-    if (!P.onExit && !P.home && PT.on && Math.abs(PT.x - pose.x) < 2.3 + 2.3 * PT.sx && Math.abs(PT.z - pose.z) < 1.82) die('衝突した');
+    if (!P.onExit && !P.home && KT.on && Math.abs(KT.x - pose.x) < 2.3 + 5.5 && Math.abs(KT.z - pose.z) < 0.92 + 1.23) bump(KT.x, KT.z, KT.v, 5.5, 1.23);
+    if (!P.onExit && !P.home && PT.on && Math.abs(PT.x - pose.x) < 2.3 + 2.3 * PT.sx && Math.abs(PT.z - pose.z) < 1.82) bump(PT.x, PT.z, PT.v, 2.3 * PT.sx, 0.9);
     if (!P.onExit && !P.home && BK.on) for (let i = 0; i < (BK.twin ? 2 : 1); i++){
       const bz = BK.z + (BK.twin ? (i ? 0.8 : -0.8) : 0);
-      if (Math.abs(BK.x - pose.x) < 2.3 + 1.1 * BK.scale && Math.abs(bz - pose.z) < 0.92 + 0.45 * BK.scale){ die('衝突した'); break; }
+      if (Math.abs(BK.x - pose.x) < 2.3 + 1.1 * BK.scale && Math.abs(bz - pose.z) < 0.92 + 0.45 * BK.scale){ bump(BK.x, bz, BK.v, 1.1 * BK.scale, 0.45 * BK.scale); break; }
     }
     /* same model as the UE build: crawl below 65 km/h and the car behind closes in, and the
        chance of it hitting you climbs with how close it is */
     const def = clamp((SAFE - P.v) / SAFE, 0, 1);
     /* 09-29: no one rides up behind you on the ramp or at the main-line toll plaza - you have to
        be slow there for the ETC bar */
-    const slowOK = P.onExit || !!P.home;   /* ...nor once the way home is open (09-29: the car behind used to close in on you after the toll) */
+    const slowOK = P.onExit || !!P.home || ARREST.on;   /* ...nor once the way home is open (09-29: the car behind used to close in on you after the toll) */
     P.risk = clamp(P.risk + ((def > 0 && P.runT > 6 && !slowOK) ? def * 0.16 : -0.6) * dt, 0, 1);
-    if (!P.home && P.risk > 0.45 && Math.random() < P.risk * 0.55 * dt){ P.rearHit = true; die('追突された'); }
+    if (!P.home && P.risk > 0.45 && Math.random() < P.risk * 0.55 * dt){ bump(pose.x - 4.4, pose.z, P.v + 5, 2.25, 0.89); P.risk = 0.25; }   /* nudged from behind, then it drops back */
   }
   followerOn = P.risk > 0.004 || P.rearHit;
   followerDist = P.rearHit ? 5.05 : 5.6 + 74.4 * (1 - P.risk) * (1 - P.risk);
@@ -4043,6 +4344,7 @@ function sync(){
   }
   const yawOff = Math.atan2(P.latV, Math.max(P.v, 1)) * 0.9 + yawBlend;
   car.position.set(pose.x, pose.y, pose.z);
+  if (BUMP.shake > 0){ const k = BUMP.shake * 0.3; car.position.x += (Math.random() - 0.5) * k; car.position.y += (Math.random() - 0.5) * k * 0.6; car.position.z += (Math.random() - 0.5) * k; }   /* the jolt of a knock */
   car.rotation.set(0, -(pose.th + yawOff), pose.pt);
   wheelSpin.rotation.z = -P.steer * 2.6;
   const z = inZone();
@@ -4211,6 +4513,7 @@ function sync(){
       clinger.legs[0].rotation.z = 0.25 * f; clinger.legs[1].rotation.z = -0.25 * f;
     }
   }
+  arrestDraw();
   bikers.forEach((bm, i) => {
     if (!BK.on || (i === 1 && !BK.twin)){ bm.g.visible = false; return; }
     bm.g.visible = true;
@@ -4385,7 +4688,8 @@ function sndUpdate(dt){
   set(S.bus.gain, P.dead ? 0.15 : 1, P.dead ? 0.03 : 0.3);
   /* the car behind leans on its horn in time with its flashing lights */
   const ph = (clock * 2.4) % 1;
-  set(S.hornG.gain, !P.dead && followerOn && P.risk > 0.55 && (ph < 0.22 || (ph > 0.34 && ph < 0.5)) ? 0.07 : 0, 0.015);
+  const blare = BUMP.horn > 0 && (BUMP.horn % 0.5) > 0.12;   /* after a knock: the other driver, on and off the horn */
+  set(S.hornG.gain, HONK.on && running ? 0.13 : blare ? 0.11 : !P.dead && followerOn && P.risk > 0.55 && (ph < 0.22 || (ph > 0.34 && ph < 0.5)) ? 0.07 : 0, 0.015);
 }
 /* the crash: a hard impact, crumpling metal, a heavy thud, the windscreen going, and parts
    scraping to a stop. Everything else is pulled down under it (see sndUpdate). */
@@ -4454,6 +4758,16 @@ function sndChirp(){
     o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.09);
   }
 }
+/* a knock: a dull thud and a short crunch */
+function sndBump(){
+  const S = SND; if (!S.ctx) return;
+  const ctx = S.ctx, t = ctx.currentTime + 0.005, out = S.G(0.8); out.connect(S.master);
+  const o = ctx.createOscillator(), g = S.G(0); o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.25);
+  o.connect(g); g.connect(out); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3); o.start(t); o.stop(t + 0.32);
+  const s = ctx.createBufferSource(), f = S.F('bandpass', 1400, 0.8), g2 = S.G(0);
+  s.buffer = S.white; s.connect(f); f.connect(g2); g2.connect(out);
+  g2.gain.setValueAtTime(0.5, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.18); s.start(t, Math.random()); s.stop(t + 0.2);
+}
 function sndCrash(rear){
   const S = SND;
   if (!S.ctx) return;
@@ -4502,7 +4816,7 @@ function resize(){
   const w = innerWidth, h = innerHeight;
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   cam.aspect = w / h;
-  cam.fov = clamp(2 * Math.atan(Math.tan(39 * D2R) / cam.aspect) / D2R, 38, 72);
+  cam.fov = clamp(2 * Math.atan(Math.tan(39 * D2R) / cam.aspect) / D2R, cam.aspect > 1.9 ? 55 : 38, 72);   /* 09-30: at least the 16:9 height, so on wide phones (iPhone ~19.5:9) the mirror is not cut off at the top */
   cam.updateProjectionMatrix();
   mainScale = h * pr / (2 * Math.tan(cam.fov * D2R / 2));
   cityMat.uniforms.uPR.value = pr;
@@ -4565,7 +4879,7 @@ addEventListener('keydown', e => { if (e.code === 'KeyM' && !e.repeat) toggleSnd
 paintSnd();
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && running) keepAwake();
-  if (SND.ctx){ if (document.hidden) SND.ctx.suspend(); else if (running || P.over || P.ended) SND.ctx.resume(); }
+  if (SND.ctx){ if (document.hidden) SND.ctx.suspend(); else if (running || (P.ended && !endEl.hidden)) SND.ctx.resume(); }
   last = performance.now();
 });
 /* full screen on phones (09-28): browsers only allow it from a tap, so it goes with 出発, plus a
@@ -4635,7 +4949,7 @@ $('dbgAll').addEventListener('click', () => dbgStart('all'));
 $('dbgHint').addEventListener('click', () => dbgStart('hint'));
 $('dbg8a').addEventListener('click', () => dbgStart('8a'));
 $('dbg8b').addEventListener('click', () => dbgStart('8b'));
-for (const k of [1, 2, 3, 4, 5]) $('dbgE' + k).addEventListener('click', () => dbgStart('e' + k));
+for (const k of [1, 2, 3, 4, 5, 6]) $('dbgE' + k).addEventListener('click', () => dbgStart('e' + k));
 /* choose one anomaly from the list */
 const dbgSel = $('dbgSel');
 ANOM_IDS.forEach((id, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = `${i + 1}. ${ANOMALIES[id]}`; dbgSel.appendChild(o); });
@@ -4655,7 +4969,7 @@ $('dbgNext').addEventListener('click', () => dbgJump(1));
 addEventListener('keydown', e => { if (DBG.mode === 'all' && !e.repeat){ if (e.code === 'KeyN') dbgJump(1); if (e.code === 'KeyB') dbgJump(-1); } });
 {
   /* harder still (09-28): tap the title 3 times quickly, then within 4 s tap the line
-     「エンディングは全部で5つ。」 4 times, then within 5 s press and hold the title for 3 s.
+     「エンディングは全部で6つ。」 4 times, then within 5 s press and hold the title for 3 s.
      Any slip starts it over. Or open the page with #nd8dbg. */
   const ttl = $('ttl'), endLine = $('endLine');
   const D = { stage: 0, n: 0, lastT: 0, stageT: 0, hold: 0 };
@@ -4687,6 +5001,8 @@ $('again').addEventListener('click', () => {
   running = false; pauseBtn.hidden = true; touchEl.hidden = true;
   panel.hidden = false; startBtn.textContent = '出発'; startBtn.focus();
   $('toTitle').hidden = true;
+  if (SND.ctx) SND.ctx.suspend();   /* 09-30: the title is quiet (the engine, rain and siren used to carry on) */
+  try { window.speechSynthesis && speechSynthesis.cancel(); } catch (_) {}
 });
 /* from the pause window: give up this run and go back to the title (the same as after an ending) */
 $('toTitle').addEventListener('click', () => $('again').click());
