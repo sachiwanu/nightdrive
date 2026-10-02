@@ -137,6 +137,14 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 .home-eyebrow{margin:0;font-size:14px;letter-spacing:.2em;color:var(--sodium);}
 .home-card h1{margin:6px 0 4px;font:900 clamp(44px,9vw,68px)/1.05 "Zen Kaku Gothic New",system-ui,sans-serif;color:#FFE3BF;}
 .stats.home-stats{grid-template-columns:repeat(2,1fr);}
+#endGrade{display:flex;align-items:center;gap:10px;margin:6px 0 4px;}
+#endGrade .g-lab{font:700 13px/1 "BIZ UDPGothic",system-ui,sans-serif;letter-spacing:.2em;opacity:.75;}
+#gradeLetter{font:900 34px/1 "Zen Kaku Gothic New",system-ui,sans-serif;color:var(--sodium);min-width:1.1em;text-align:center;}
+#gradeLadder{display:flex;gap:4px;margin:0;padding:0;list-style:none;flex:1;}
+#gradeLadder li{flex:1;min-width:0;padding:5px 2px 4px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+  font:700 11px/1.25 "BIZ UDPGothic",system-ui,sans-serif;text-align:center;opacity:.5;}
+#gradeLadder li b{display:block;font-size:15px;}
+#gradeLadder li.on{opacity:1;background:rgba(255,182,94,.28);border-color:var(--sodium);}
 .home-card{max-height:calc(100dvh - 32px);overflow:auto;}
 .ver{font-size:.3em;font-weight:700;opacity:.6;margin-left:.45em;letter-spacing:.04em;vertical-align:middle;}
 #updBtn{margin-left:8px;padding:6px 14px;border-radius:8px;border:0;background:var(--sodium);color:#2A1706;font:700 15px/1 "BIZ UDPGothic",system-ui,sans-serif;cursor:pointer;}
@@ -199,6 +207,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
   <div class="home-card" role="dialog" aria-labelledby="endTtl">
     <p class="home-eyebrow" id="endNo">エンディング</p>
     <h1 id="endTtl">ただいま。</h1>
+    <div id="endGrade"><span class="g-lab">評価</span><b id="gradeLetter">S</b><ol id="gradeLadder"></ol></div>
     <dl class="stats home-stats">
       <div><dt>走った区間</dt><dd><b id="endSecs">0</b></dd></div>
       <div><dt>時間</dt><dd><b id="endTime">0:00</b></dd></div>
@@ -210,8 +219,9 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 </div>
 <div id="panel">
   <div class="sign intro" role="dialog" aria-labelledby="ttl">
-    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.4</span></h1>
+    <h1 id="ttl">8番インターチェンジ<span class="ver">v0.9.5</span></h1>
     <p class="rule">異変があったら、<b>左の出口</b>で引き返す。<br>無ければ、そのまま<b>本線</b>を進む。</p>
+    <p class="rule warn">車にぶつかったら、エリア0からやり直し。</p>
     <p class="rule small" id="endLine">エンディングは全部で6つ。</p>
     <p class="rule small" id="upd" hidden>新しいバージョン <b id="updVer"></b> があります　<button id="updBtn" type="button">更新する</button></p>
     <p class="rule small" id="iosTip" hidden>iPhoneは横向きで。「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
@@ -1855,9 +1865,11 @@ function updateBusWreck(dt){
   if (!BW.wreck) BW.wreck = buildBusWreck(bus);
   if (!on){ if (BW.placed || BW.broken){ BW.placed = BW.broken = false; bus.vPref = 21 + Math.random() * 3; } BW.wreck.g.visible = false; busJunk.pts.visible = false; return; }
   /* bring it up well ahead in the lane beside yours, a little slower than you */
-  if (!BW.placed && !P.onExit && P.x > ZONE_A - 60 && P.x < GANTRY_X - 400){
+  /* 10-02: brought in just after the tunnel, nearer and slower, so it bursts with plenty of road
+     left before the fork (it used to go off right at the fork) */
+  if (!BW.placed && !P.onExit && P.x > TUN_B + 10 && P.x < GANTRY_X - 400){
     const pl = clamp(Math.round((pose.z + 3.5) / 3.5), 0, 2), lane = pl === 2 ? 1 : pl + 1;
-    Object.assign(bus, { x: pose.x + 260, z: LANES[lane], lane, tgt: lane, lc: 0, v: 19, vPref: 19, kind: 'car' });
+    Object.assign(bus, { x: pose.x + 120, z: LANES[lane], lane, tgt: lane, lc: 0, v: 15, vPref: 15, kind: 'car' });
     BW.placed = true; BW.broken = false; BW.t = 0;
   }
   const dx = bus.x - pose.x;
@@ -1887,6 +1899,58 @@ function updateBusWreck(dt){
     if (J.life[i] <= 0) J.pos[i*3+1] = -100;
   }
   J.pts.geometry.attributes.position.needsUpdate = true;
+}
+/* anomaly 58 (10-02, after 8番出口): a man in white flattened against the tunnel wall, spread out
+   over the cross where four wall panels meet, so at first he passes for the panels. As you come
+   up on him (well ahead of you, in plain view) he peels off the wall, drops to the road and, once
+   you are past, runs after you - you see him in the mirrors. */
+const PM = { s: -1, t: 0, x: 0, z: 0, y: 0, o: null, tilt: null, turn: null, ph: 0 };
+function panelMan(){
+  if (PM.o) return PM.o;
+  const W = [0.86, 0.86, 0.83];
+  const o = personModel(false, W, { trousers: W, sleeves: W, shoes: [0.8, 0.8, 0.78] });
+  o.g.children[0].rotation.z = 0;
+  scene.remove(o.g);
+  const tilt = new THREE.Group(), turn = new THREE.Group();
+  tilt.add(turn); turn.add(o.g); o.g.visible = true; tilt.visible = false; scene.add(tilt);
+  PM.o = o; PM.tilt = tilt; PM.turn = turn;
+  return o;
+}
+function updatePanelMan(dt, tunX){
+  const on = anomaly === 58 && !P.onExit;
+  if (!on){ if (PM.tilt) PM.tilt.visible = false; PM.s = -1; return; }
+  const o = panelMan();
+  const YW = 1.95, R = BORE_R - 0.12, ZW = BORE_C0 - Math.sqrt(R * R - YW * YW) + 0.06, A = Math.asin(YW / R);
+  if (PM.s === -1){ PM.s = 0; PM.t = 0; PM.x = TUN_A + 4 * 32 + tunX; }   /* a panel corner 128 m in */
+  const dx = PM.x - pose.x;
+  PM.t += dt;
+  const arms = sp => { o.arms[0].rotation.set(sp, 0, 0); o.arms[1].rotation.set(-sp, 0, 0); };
+  const legs = sp => { o.legs[0].rotation.set(sp, 0, 0); o.legs[1].rotation.set(-sp, 0, 0); };
+  if (PM.s === 0){                                   /* flat on the wall, spread over the panel cross */
+    PM.tilt.position.set(PM.x, YW - 1.15 * Math.cos(A * 0.9), ZW - 1.15 * Math.sin(A * 0.9)); PM.tilt.rotation.set(A * 0.9, 0, 0); PM.turn.rotation.set(0, -Math.PI / 2, 0);
+    arms(1.25); legs(0.35);
+    if (dx < 65 && dx > 8){ PM.s = 1; PM.t = 0; }   /* well ahead, so you see it happen */
+  } else if (PM.s === 1){                            /* peels off the wall and drops onto the shoulder */
+    const k = sm(PM.t / 1.6);
+    PM.tilt.position.set(PM.x, lerp(YW - 1.15 * Math.cos(A * 0.9), 0, k), lerp(ZW - 1.15 * Math.sin(A * 0.9), -5.6, k)); PM.tilt.rotation.set(A * 0.9 * (1 - k), 0, 0);
+    PM.turn.rotation.set(0, lerp(-Math.PI / 2, Math.PI, k), 0);          /* ends up facing you */
+    arms(1.25 * (1 - k)); legs(0.35 * (1 - k));
+    if (PM.t > 1.6){ PM.s = 2; PM.t = 0; PM.z = -5.6; }
+  } else if (PM.s === 2){                            /* waits, facing you, until you go by */
+    PM.tilt.position.set(PM.x, 0, PM.z); PM.turn.rotation.set(0, Math.PI, 0);
+    if (dx < 1){ PM.s = 3; PM.t = 0; PM.v = 4; }
+  } else if (PM.s === 3){                            /* and then runs after you */
+    PM.v = Math.min(PM.v + 9 * dt, Math.max(8, P.v - 1.5));
+    PM.x += PM.v * dt; PM.z += clamp(pose.z - PM.z, -1.5 * dt, 1.5 * dt);
+    PM.ph += dt * (6 + PM.v * 0.35);
+    const s = Math.sin(PM.ph);
+    PM.tilt.position.set(PM.x, Math.abs(Math.cos(PM.ph)) * 0.08, PM.z); PM.tilt.rotation.set(0, 0, 0);
+    PM.turn.rotation.set(0, 0, -0.25);                                    /* leaning into the run, after you */
+    o.legs[0].rotation.set(0, 0, 0.9 * s); o.legs[1].rotation.set(0, 0, -0.9 * s);
+    o.arms[0].rotation.set(0, 0, -1.0 * s); o.arms[1].rotation.set(0, 0, 1.0 * s);
+    if (pose.x - PM.x > 160 || PM.t > 30){ PM.s = 4; }
+  }
+  PM.tilt.visible = PM.s >= 0 && PM.s < 4;
 }
 const orbCams = [];
 scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); if (o.name === 'zoneSign') zoneSigns.push(o); });
@@ -3300,10 +3364,35 @@ function unseen(c){
 }
 /* never grow a small shape into a car right on top of you */
 const roomToSwap = c => !(Math.abs(c.z - pose.z) < 2.6 && Math.abs(c.x - pose.x) < 14);
+/* anomaly 57 (10-02): about half the cars on your side are fish - car-sized, swimming along at
+   head height over their lane, tails beating. Built facing +x like the cars. */
+function fishModel(seed){
+  const r = mulberry32(570 + seed), g = new THREE.Group(), tint = 0.75 + r() * 0.5;
+  const geo = new THREE.SphereGeometry(1, 18, 12); geo.scale(2.05, 0.66, 0.56);
+  const pos = geo.attributes.position, n = pos.count, col = new Float32Array(n * 3), emi = new Float32Array(n), lit = new Float32Array(n).fill(1);
+  for (let i = 0; i < n; i++){
+    const y = pos.getY(i) / 0.66, k = clamp((y + 0.2) / 1.2, 0, 1);              /* dark back, silver belly */
+    col[i*3] = (0.62 - 0.45 * k) * tint; col[i*3+1] = (0.66 - 0.4 * k) * tint; col[i*3+2] = (0.72 - 0.28 * k);
+    emi[i] = 0.05;
+  }
+  geo.setAttribute('aCol', new THREE.BufferAttribute(col, 3)); geo.setAttribute('aEmi', new THREE.BufferAttribute(emi, 1)); geo.setAttribute('aLit', new THREE.BufferAttribute(lit, 1));
+  g.add(new THREE.Mesh(geo, worldMat));
+  const fins = new B(), FIN = [0.32 * tint, 0.4 * tint, 0.5];
+  fins.quad([-0.6, 0.55, 0], [0.5, 0.55, 0], [-0.2, 1.05, 0], [-0.2, 1.05, 0], FIN, 0.04);              /* dorsal fin */
+  for (const s of [-1, 1]) fins.quad([0.9, -0.25, s * 0.45], [0.5, -0.25, s * 0.5], [0.4, -0.55, s * 0.85], [0.4, -0.55, s * 0.85], FIN, 0.04);   /* pectoral fins */
+  for (const s of [-1, 1]){ fins.box(1.55, 0.18, s * 0.38, 0.05, 0.2, 0.06, [0.95, 0.95, 0.9], 0.2); fins.box(1.58, 0.18, s * 0.39, 0.04, 0.11, 0.06, [0.02, 0.02, 0.02]); }   /* eyes */
+  g.add(new THREE.Mesh(fins.geo(), worldMat));
+  const tail = new THREE.Group(), tb = new B(); tail.position.x = -1.9;
+  tb.quad([0, 0, 0], [-1.1, 0.75, 0], [-0.85, 0, 0], [-1.1, -0.75, 0], FIN, 0.04);
+  tail.add(new THREE.Mesh(tb.geo(), worldMat)); g.add(tail);
+  g.visible = false; scene.add(g);
+  return { g, tail };
+}
 function setKind(c, k){
   c.kind = k;
-  c.hl = k === 'car' ? c.hl0 : k === 'bike' ? 0.9 : 0.35;
-  c.hw = k === 'car' ? c.hw0 : k === 'bike' ? 0.35 : 0.3;
+  if (k === 'fish' && !c.fishM) c.fishM = fishModel(traffic.indexOf(c));
+  c.hl = k === 'car' || k === 'fish' ? c.hl0 : k === 'bike' ? 0.9 : 0.35;
+  c.hw = k === 'car' ? c.hw0 : k === 'fish' ? 0.6 : k === 'bike' ? 0.35 : 0.3;
 }
 function placeSame(c, ahead){
   c.stand = false; setKind(c, c.want);
@@ -3592,6 +3681,8 @@ const ANOMALIES = {
   54: 'トンネルの屋根が無く、星空が見えている',
   55: 'バスの窓が全部割れて、カーテンや人やゴミが外に出てくる',
   56: 'ワイパーが三色団子の串になっている',
+  57: '走っている車の半分くらいが、車くらいの大きさの魚になって泳いでいる',
+  58: 'トンネルの壁のパネルに化けた人がはがれて、走って追いかけてくる',
   47: '全部の車がハザードを出しながら走っている', 48: '気づくと車が左車線に一列にずっと並んでいる（分岐の手前で途切れる）',
   45: 'トンネルの白いパネルがところどころはがれている',
   46: 'トンネルの壁がストリートアート（スプレーの落書き）だらけ',
@@ -3609,8 +3700,8 @@ let noInd = false;                     // anomaly 29, while it is showing
 /* 5 levels (09-28): 1 = can't miss it ... 5 = very hard. 1 (舵) and 40 (mirror) change slowly,
    so they count as level 4. */
 const DIFF = [
-  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52, 54, 55],
-  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51, 53, 56],
+  [2, 7, 9, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52, 54, 55, 57],
+  [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51, 53, 56, 58],
   [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
@@ -3770,6 +3861,7 @@ function enterTunnel(){
   if (anomaly === 7) flyers.forEach((f, i) => spawnFlyer(f, TUN_B + 150 + i * 110 + Math.random() * 40));
   if (anomaly === 15) runner.start(TUN_B + 150);     /* close enough that you meet him soon after the tunnel */
   if (anomaly === 17) standCar();
+  if (anomaly === 57){ let i = 0; for (const c of traffic) if (!c.onc && !c.truck && !c.extra && (i++ % 2 === 0)) c.want = 'fish'; }   /* half of them; they turn into fish out in the fog */
   if (anomaly === 18 || anomaly === 19){
     /* everything out of sight changes and is spread along the road past the tunnel, a little
        slower than you, so you come up on them and pass them one by one */
@@ -3858,7 +3950,9 @@ const PAN = { t: 0 };   // how long the view has rested on the house at the end
    glancing blow, slowed or shoved on if it was nose-to-tail - the other driver leans on the horn,
    the view jolts, and it goes down as an accident on your record (for the endings) */
 const BUMP = { cool: 0, lat: 0, horn: 0, shake: 0 };
+const BUMP_ONLY = false;               // 10-02: crashes are back (true = the old knock-and-carry-on)
 function bump(ox, oz, ov, hl, hw){
+  if (!BUMP_ONLY){ die('衝突した'); return; }
   const dx = pose.x - ox, dz = pose.z - oz;
   const ovX = (2.3 + hl) - Math.abs(dx), ovZ = (0.92 + hw) - Math.abs(dz);
   const s = Math.sign(dz) || (Math.random() < 0.5 ? -1 : 1);
@@ -3973,6 +4067,10 @@ function showEnding(){
   $('endNo').textContent = `エンディング ${P.endingNo} / 6`;
   if (!DBG.mode){ track(`ending-${P.endingNo}`); track("ending-all"); track(clearBand(P.runT)); }   /* ending-all: every ending, whichever (09-28) */
   $('endTtl').textContent = ['', 'ただいま。', '……ただいま。', '……ただいま。', '……。', '……。', '検挙。'][P.endingNo];
+  /* 10-02: where this ending stands among the six, best to worst, with its grade */
+  const LADDER = [[1, 'S', '出迎え'], [2, 'A', '帰宅'], [4, 'B', '遅すぎた'], [3, 'C', '三途の川'], [5, 'D', '警察と川'], [6, 'E', '検挙']];
+  $('gradeLadder').innerHTML = LADDER.map(([no, g, name]) => `<li class="${no === P.endingNo ? 'on' : ''}"><b>${g}</b>${name}<br>E${no}</li>`).join('');
+  $('gradeLetter').textContent = (LADDER.find(l => l[0] === P.endingNo) || [0, '-'])[1];
   $('endMiss').textContent = P.mistakes; $('endCrash').textContent = P.crashes;
   const t = Math.round(P.runT), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('endSecs').textContent = P.sections; $('endTime').textContent = mm + ':' + ss;
@@ -4283,7 +4381,7 @@ function step(dt){
        be slow there for the ETC bar */
     const slowOK = P.onExit || !!P.home || ARREST.on;   /* ...nor once the way home is open (09-29: the car behind used to close in on you after the toll) */
     P.risk = clamp(P.risk + ((def > 0 && P.runT > 6 && !slowOK) ? def * 0.16 : -0.6) * dt, 0, 1);
-    if (!P.home && P.risk > 0.45 && Math.random() < P.risk * 0.55 * dt){ bump(pose.x - 4.4, pose.z, P.v + 5, 2.25, 0.89); P.risk = 0.25; }   /* nudged from behind, then it drops back */
+    if (!P.home && P.risk > 0.45 && Math.random() < P.risk * 0.55 * dt){ if (BUMP_ONLY){ bump(pose.x - 4.4, pose.z, P.v + 5, 2.25, 0.89); P.risk = 0.25; } else { P.rearHit = true; die('追突された'); } }
   }
   followerOn = P.risk > 0.004 || P.rearHit;
   followerDist = P.rearHit ? 5.05 : 5.6 + 74.4 * (1 - P.risk) * (1 - P.risk);
@@ -4504,8 +4602,14 @@ function sync(){
     if (((performance.now() / 1000) * 2.2 + (i % 2) * 0.5) % 1 < 0.5) dglow(p[0], p[1], p[2], 1.0, 0.08, 0.05, 1.2);
   });
   for (const c of traffic){
-    if (c.parked){ c.mesh.visible = c.bikeM.g.visible = c.runM.g.visible = false; continue; }
-    if (!c.onc){ c.mesh.visible = c.kind === 'car'; c.bikeM.g.visible = c.kind === 'bike'; c.runM.g.visible = c.kind === 'run'; }
+    if (c.parked){ c.mesh.visible = c.bikeM.g.visible = c.runM.g.visible = false; if (c.fishM) c.fishM.g.visible = false; continue; }
+    if (!c.onc){ c.mesh.visible = c.kind === 'car'; c.bikeM.g.visible = c.kind === 'bike'; c.runM.g.visible = c.kind === 'run'; if (c.fishM) c.fishM.g.visible = c.kind === 'fish'; }
+    if (!c.onc && c.kind === 'fish'){
+      const F = c.fishM || (c.fishM = fishModel(traffic.indexOf(c))), w = Math.sin(clock * 6 + c.ph2 * 0.3); F.g.visible = true;
+      F.g.position.set(c.x, 1.0 + Math.sin(clock * 1.7 + c.ph2) * 0.15, c.z); F.g.rotation.set(0, -c.th + 0.1 * w, 0.04 * Math.sin(clock * 1.7 + c.ph2));
+      F.tail.rotation.y = 0.55 * Math.sin(clock * 6 + c.ph2 * 0.3 + 1.2);
+      continue;
+    }
     if (!c.onc && c.kind !== 'car'){
       const M = c.kind === 'bike' ? c.bikeM : c.runM, cs = Math.cos(c.th), sn = Math.sin(c.th);
       M.g.position.set(c.x, 0, c.z); M.g.rotation.set(0, -c.th, 0);
@@ -4554,7 +4658,7 @@ function sync(){
   const tunX = SECTION * Math.round((pose.x - (TUN_A + TUN_B) / 2) / SECTION);
   for (const [o, id] of [[peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
   manyExits.visible = false; updateGoo(sdt, tunX);
-  updateMonsters(sdt, tunX);
+  updateMonsters(sdt, tunX); updatePanelMan(sdt, tunX);
   orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
   for (const m of orbCams) m.visible = !orbSitters.visible;
   updateGates(sdt); updateMainToll(sdt); updateBusWreck(sdt);
@@ -5112,7 +5216,7 @@ function boot(data){
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => ({ count: P.count }));
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
-window.__nd = { monsters, mainToll, cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, get noInd(){ return noInd; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
+window.__nd = { BW, monsters, mainToll, cam, mcam, car, renderer, scene, sideMirrors, ORB, MIR, HELM, mirrorPivot, P, pose, SND, BK, PT, KT, patrols, clinger, bikers, DBG, DM, family, homeLights, startHomeLeg, ENDING4_T, rivers, police, officers, gaya, continueRun, daimonji, dbgStart, dbgJump, traffic, flyers, runner, enterTunnel, standCar, barricade, barricadeM, EX, HOME, HOME_M, ANOMALIES, step, frame, layout: { ORBIS_X, SIGN_X, ZSIGN_X, ZONE_A, ZONE_B, GANTRY_X, DECEL_START, FORK, X_JOIN, S_MERGE, OUT_END, ACC_END, MERGE_END, TUN_A, TUN_B, HM_A, HM_FULL, HM_FORK, SECTION }, get anomaly(){ return anomaly; }, get noInd(){ return noInd; }, setAnomaly(id){ anomaly = id; applyAnomaly(); } };
 </script>
 <script data-goatcounter="https://hachiban-ic.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 
