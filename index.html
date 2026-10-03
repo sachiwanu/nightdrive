@@ -160,6 +160,8 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 #endMarks .em{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;border:1.5px dashed rgba(255,255,255,.35);color:rgba(255,255,255,.45);}
 #endMarks .em.got{border:1.5px solid var(--sodium);background:rgba(255,182,94,.25);color:#fff;}
 #endMarks .em-msg{margin-left:6px;opacity:.85;}
+#foundRate{margin:0 0 6px;font:700 14px/1.3 "BIZ UDPGothic",system-ui,sans-serif;opacity:.9;}
+#foundRate b{font-size:20px;color:var(--sodium);margin:0 2px;}
 #again{width:100%;height:52px;border:0;border-radius:10px;background:var(--sodium);color:#2A1706;
   font:900 20px/1 "Zen Kaku Gothic New",system-ui,sans-serif;letter-spacing:.12em;cursor:pointer;}
 #again:focus-visible{outline:3px solid #fff;outline-offset:3px;}
@@ -228,6 +230,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
     <p class="rule warn">車にぶつかったら、エリア0からやり直し。</p>
     <p class="rule small" id="endLine">エンディングは全部で6つ。</p>
     <div id="endMarks" aria-label="見たエンディング"></div>
+    <p id="foundRate" hidden></p>
     <p class="rule small" id="upd" hidden>新しいバージョン <b id="updVer"></b> があります　<button id="updBtn" type="button">更新する</button></p>
     <p class="rule small" id="iosTip" hidden>iPhoneは横向きで。「共有 → ホーム画面に追加」から開くと全画面で遊べます。</p>
     <table class="keys">
@@ -1067,8 +1070,11 @@ function buildSection(){
   solid(12.65, 0, SECTION, 0.2); solid(23.15, 0, SECTION, 0.2);
 
   /* guardrails you can see through (the valley view matters), concrete in the median */
+  /* (10-03) the stretch just past the tunnel goes in a mesh of its own, hidden when anomaly 64 carries the tunnel on over it */
+  const railX = new B();
   const guard = pts => { for (let i = 0; i < pts.length - 1; i++){ const a = pts[i], b = pts[i+1];
-    Wb(a[0]).bar(a, b, 0.58, 0.86, 0.07, COL.rail); Wb(a[0]).box(a[0], a[1] + 0.4, a[2], 0.12, 0.8, 0.12, COL.post); } };
+    const bb = a[0] >= TUN_B && a[0] < TUN_B + (TUN_B - TUN_A) + 2 ? railX : Wb(a[0]);
+    bb.bar(a, b, 0.58, 0.86, 0.07, COL.rail); bb.box(a[0], a[1] + 0.4, a[2], 0.12, 0.8, 0.12, COL.post); } };
   const lineOf = (x0, x1, zf) => { const p = []; for (let x = x0; x < x1; x += 4) p.push([x, -0.2, zf(x)]); p.push([x1, -0.2, zf(x1)]); return p; };
   guard(lineOf(0, TUN_A - 1, () => -6.4));
   guard(lineOf(TUN_B + 1, DECEL_START, () => -6.4));
@@ -1535,6 +1541,7 @@ function buildSection(){
   for (const eb of g0etc) g.add(new THREE.Mesh(eb.geo(), mapMat(etcTex)));
   g.add(new THREE.Mesh(exitPaintB.geo(), mapMatA(exitWordTex)), new THREE.Mesh(mainPaintB.geo(), mapMatA(mainWordTex)));
   { const m = new THREE.Mesh(orbCamB.geo(), worldMat); m.name = 'orbCams'; g.add(m); }
+  { const m = new THREE.Mesh(railX.geo(), worldMat); m.name = 'extRail'; g.add(m); }
   g.add(new THREE.Mesh(signMain.geo(), mapMat(mainTex)));
   g.add(new THREE.Mesh(chev.geo(), mapMat(chevTex)));
   g.add(new THREE.Mesh(tunPlate.geo(), new THREE.ShaderMaterial({ uniforms: Object.assign({}, WU, { uMap: { value: tunTex } }),
@@ -1965,7 +1972,8 @@ function updatePanelMan(dt, tunX){
   PM.tilt.visible = PM.s >= 0 && PM.s < 4;
 }
 const orbCams = [];
-scene.traverse(o => { if (o.name === 'orbCams') orbCams.push(o); if (o.name === 'zoneSign') zoneSigns.push(o); });
+const extRails = [];
+scene.traverse(o => { if (o.name === 'extRail') extRails.push(o); if (o.name === 'orbCams') orbCams.push(o); if (o.name === 'zoneSign') zoneSigns.push(o); });
 /* pristine copies, so each new section can start from a clean slate */
 const ORIG = {
   poleP: SEC.poles.attributes.position.array.slice(),
@@ -3336,6 +3344,68 @@ function makeOfficer(){
   return o;
 }
 const officers = Array.from({ length: 6 }, makeOfficer);
+/* anomaly 64 (10-03, second zone on): the tunnel goes on twice as long. An overlay bore carries on
+   from the exit portal for another 190 m (both bores, lamps, the panel band) with its own portal at
+   the far end; the street lamps over that stretch are sunk out of sight and its light map is the
+   tunnel's. Rain, the cabin light and the road sound go by TUN_END instead of TUN_B. */
+let TUN_END = TUN_B;
+const TUNX = { g: null, len: TUN_B - TUN_A };
+(function buildTunExt(){
+  const x0 = TUN_B - 0.05, x1 = TUN_B + TUNX.len, b = new B(), pan = new B();
+  for (const c of [BORE_C0, BORE_C1]){
+    const K = 26;
+    for (let x = x0; x < x1; x += 5){
+      const xe = Math.min(x + 5, x1);
+      for (let k = 0; k < K; k++){
+        const a0 = Math.PI*k/K, a1 = Math.PI*(k+1)/K;
+        const z0 = c + BORE_R*Math.cos(a0), y0 = BORE_R*Math.sin(a0), z1 = c + BORE_R*Math.cos(a1), y1 = BORE_R*Math.sin(a1);
+        b.quad([x,y0,z0],[xe,y0,z0],[xe,y1,z1],[x,y1,z1], COL.tWall, 0, 0.9);
+      }
+    }
+    /* the panelled lower walls, the same tiles as the real tunnel (10-03) */
+    const R = BORE_R - 0.12, NA = 6, p0 = Math.asin(TW_Y0 / R), p1 = Math.asin(TW_Y1 / R);
+    for (const side of [-1, 1]) for (let x = TUN_B; x < x1 - 1e-6; x += TW_LEN){
+      const xe = Math.min(x + TW_LEN, x1), u1 = (xe - x) / TW_LEN;
+      for (let k = 0; k < NA; k++){
+        const e0 = p0 + (p1 - p0) * k / NA, e1 = p0 + (p1 - p0) * (k + 1) / NA;
+        const ya = R * Math.sin(e0), yb = R * Math.sin(e1), za = c + side * R * Math.cos(e0), zb = c + side * R * Math.cos(e1);
+        const v0 = (ya - TW_Y0) / (TW_Y1 - TW_Y0), v1 = (yb - TW_Y0) / (TW_Y1 - TW_Y0);
+        pan.quad([x,ya,za],[xe,ya,za],[xe,yb,zb],[x,yb,zb], [1,1,1], 0.04, 0.9, [0,v0, u1,v0, u1,v1, 0,v1]);
+      }
+    }
+    for (let x = TUN_B + 3.5; x < x1 - 2; x += 5.5) for (const o of [-2.0, 2.0]){
+      const y = Math.sqrt(BORE_R*BORE_R - o*o) - 0.14;
+      b.box(x, y, c + o, 1.1, 0.1, 0.3, COL.tLamp, 2.0);
+    }
+  }
+  /* its far portal */
+  for (const [c, zl, zr] of [[BORE_C0, -11, 9.1], [BORE_C1, 9.1, 29.2]]){
+    const K = 40, TOP = 11.5;
+    const edge = a => { const ca = Math.cos(a), sa = Math.sin(a); let t = 1e9;
+      if (ca > 1e-6) t = Math.min(t, (zr - c)/ca); if (ca < -1e-6) t = Math.min(t, (zl - c)/ca); if (sa > 1e-6) t = Math.min(t, TOP/sa);
+      return [c + ca*t, sa*t]; };
+    for (let k = 0; k < K; k++){
+      const a0 = Math.PI*k/K, a1 = Math.PI*(k+1)/K, o0 = edge(a0), o1 = edge(a1);
+      b.quad([x1, BORE_R*Math.sin(a0), c + BORE_R*Math.cos(a0)], [x1, o0[1], o0[0]], [x1, o1[1], o1[0]], [x1, BORE_R*Math.sin(a1), c + BORE_R*Math.cos(a1)], COL.portal, 0, 0.7);
+    }
+  }
+  const g = new THREE.Group(); g.add(new THREE.Mesh(b.geo(), worldMat), new THREE.Mesh(pan.geo(), mapMat(tunWallTex))); g.visible = false; scene.add(g); TUNX.g = g;
+})();
+/* called from applyAnomaly, on the clean section, before the light map is baked */
+function setLongTunnel(on){
+  TUN_END = on ? TUN_B + TUNX.len : TUN_B;
+  WU.uTun.value.y = TUN_END;
+  if (!on) return;
+  const pp = SEC.poles.attributes.position.array, hp = SEC.heads.attributes.position.array, gp = SEC.glows.attributes.position.array;
+  for (const L of LAMPS){
+    if (L.x < TUN_B - 4 || L.x > TUN_END + 4) continue;
+    for (let v = L.pv0; v < L.pv1; v++) pp[v*3+1] -= 200;
+    for (let v = L.hv0; v < L.hv1; v++) hp[v*3+1] -= 200;
+    for (let i = L.g0; i < L.g1; i++) gp[i*3+1] -= 200;
+    for (let i = L.l0; i < L.l1; i++) LIVE[i][5] = 0;
+  }
+  for (const c of [BORE_C0, BORE_C1]) for (let x = TUN_B + 3.5; x < TUN_END - 2; x += 5.5) for (const o of [-2.0, 2.0]) LIVE.push([x, c + o, TLIGHT[0], TLIGHT[1], TLIGHT[2], 0.6, 5.0]);
+}
 /* anomaly 62 (10-03): before the exit, a roadworks-style board on the left verge says the exit is
    closed and to keep straight on the main line - a lie: the exit is open, and taking it is right */
 const CLOSED = { g: null, lamps: [] };
@@ -3558,11 +3628,81 @@ function fishModel(seed){
   g.visible = false; scene.add(g);
   return { g, tail };
 }
+/* anomaly 63 (10-03): the fish one's insect version - about half the cars are car-sized insects
+   running along their lanes: ants, spiders, grasshoppers, and bees flying at roof height.
+   Built facing +x like the cars; legs swing in a tripod gait. */
+function bugModel(seed){
+  const sp = ['ant', 'spider', 'hopper', 'bee'][seed % 4], g = new THREE.Group(), legs = [], wings = [];
+  const mk = fill => { const b = new B(); fill(b); return new THREE.Mesh(b.geo(), worldMat); };
+  const leg = (x, y, z, s, L1, L2, col, w = 0.11) => {
+    const piv = new THREE.Group(); piv.position.set(x, y, z);
+    const fem = new THREE.Group(); fem.rotation.x = -s * 0.5; piv.add(fem);
+    fem.add(mk(b => b.box(0, 0, s * L1 / 2, w, w, L1, col)));
+    const knee = new THREE.Group(); knee.position.z = s * L1; knee.rotation.x = s * 1.4; fem.add(knee);
+    knee.add(mk(b => b.box(0, 0, s * L2 / 2, w * 0.8, w * 0.8, L2, col)));
+    g.add(piv); legs.push(piv);
+  };
+  let fly = false;
+  if (sp === 'ant'){
+    const C = [0.12, 0.05, 0.04];
+    g.add(mk(b => {
+      b.box(1.75, 0.95, 0, 0.8, 0.7, 0.75, C, 0.04);                    /* head */
+      b.box(2.12, 0.72, 0.2, 0.25, 0.08, 0.08, C); b.box(2.12, 0.72, -0.2, 0.25, 0.08, 0.08, C);   /* jaws */
+      b.box(0.65, 0.95, 0, 1.3, 0.6, 0.6, C, 0.04);                     /* thorax */
+      b.box(-0.2, 0.85, 0, 0.35, 0.35, 0.3, C);                         /* waist */
+      b.box(-1.3, 1.05, 0, 1.8, 1.15, 1.25, C, 0.04);                   /* gaster */
+      for (const s of [-1, 1]){ b.box(2.2, 1.55, s * 0.25, 0.08, 0.9, 0.08, C); b.box(2.55, 1.95, s * 0.3, 0.7, 0.08, 0.08, C); }   /* antennae */
+    }));
+    for (const x of [1.0, 0.65, 0.3]) for (const s of [-1, 1]) leg(x, 0.85, s * 0.28, s, 1.1, 1.75, C);
+  } else if (sp === 'spider'){
+    const C = [0.08, 0.07, 0.05], Y = [0.85, 0.7, 0.1];
+    g.add(mk(b => {
+      b.box(0.9, 0.95, 0, 1.2, 0.6, 1.0, C, 0.04);                      /* cephalothorax */
+      b.box(-0.8, 1.3, 0, 2.2, 1.3, 1.5, C, 0.04);                      /* abdomen */
+      for (const x of [-1.5, -0.8, -0.1]) b.box(x, 1.97, 0, 0.18, 0.04, 1.2, Y, 0.1);   /* yellow bands */
+      for (const z of [-0.2, 0.2]) b.box(1.51, 1.05, z, 0.04, 0.12, 0.12, [0.7, 0.05, 0.05], 0.6);   /* eyes */
+    }));
+    for (const x of [1.3, 1.0, 0.7, 0.4]) for (const s of [-1, 1]) leg(x, 0.95, s * 0.45, s, 1.4, 2.1, C, 0.09);
+  } else if (sp === 'hopper'){
+    const G = [0.3, 0.6, 0.15], D = [0.2, 0.42, 0.1];
+    g.add(mk(b => {
+      b.box(1.9, 1.05, 0, 0.7, 0.85, 0.7, G, 0.04);                     /* head */
+      for (const z of [-0.36, 0.36]) b.box(2.05, 1.2, z, 0.25, 0.3, 0.05, [0.45, 0.35, 0.15], 0.1);   /* eyes */
+      b.box(0.3, 0.95, 0, 2.6, 0.75, 0.75, G, 0.04);                    /* body */
+      b.box(0.0, 1.4, 0, 3.2, 0.14, 0.85, D, 0.03);                     /* folded wings along the back */
+      for (const s of [-1, 1]){
+        b.box(-0.5, 1.45, s * 0.55, 1.9, 0.35, 0.18, G, 0.04);          /* the big hind thighs, sloping */
+        b.box(-1.2, 0.65, s * 0.62, 0.12, 1.3, 0.1, D);                 /* and shins down to the road */
+        b.box(2.3, 1.55, s * 0.2, 0.9, 0.06, 0.06, D);                  /* antennae */
+      }
+    }));
+    for (const x of [1.4, 0.8]) for (const s of [-1, 1]) leg(x, 0.8, s * 0.3, s, 0.7, 1.4, D);
+  } else {
+    fly = true;
+    const Yb = [0.9, 0.7, 0.08], K = [0.05, 0.04, 0.03];
+    g.add(mk(b => {
+      b.box(1.6, 0, 0, 0.6, 0.65, 0.7, K, 0.04);                        /* head */
+      for (const z of [-0.3, 0.3]) b.box(1.75, 0.08, z, 0.3, 0.35, 0.1, [0.15, 0.1, 0.05], 0.1);
+      b.box(0.8, 0, 0, 1.1, 0.95, 1.0, [0.55, 0.42, 0.12], 0.05);       /* furry thorax */
+      for (let i = 0; i < 5; i++) b.box(-0.2 - i * 0.42, -0.08 - i * 0.03, 0, 0.42, 1.05 - i * 0.12, 1.1 - i * 0.12, i % 2 ? K : Yb, 0.05);   /* striped abdomen */
+      b.box(-2.3, -0.2, 0, 0.3, 0.06, 0.06, K);                         /* sting */
+    }));
+    for (const s of [-1, 1]){
+      const w = new THREE.Group(); w.position.set(0.9, 0.45, s * 0.3);
+      w.add(mk(b => b.box(-0.4, 0, s * 1.1, 1.3, 0.03, 2.1, [0.75, 0.8, 0.85], 0.25)));
+      g.add(w); wings.push({ w, s });
+    }
+    for (const x of [1.0, 0.7, 0.4]) for (const s of [-1, 1]) leg(x, -0.35, s * 0.3, s, 0.4, 0.5, K, 0.07);
+  }
+  g.visible = false; scene.add(g);
+  return { g, legs, wings, fly };
+}
 function setKind(c, k){
   c.kind = k;
   if (k === 'fish' && !c.fishM) c.fishM = fishModel(traffic.indexOf(c));
-  c.hl = k === 'car' || k === 'fish' ? c.hl0 : k === 'bike' ? 0.9 : 0.35;
-  c.hw = k === 'car' ? c.hw0 : k === 'fish' ? 0.6 : k === 'bike' ? 0.35 : 0.3;
+  if (k === 'bug' && !c.bugM) c.bugM = bugModel(traffic.indexOf(c));
+  c.hl = k === 'car' || k === 'fish' || k === 'bug' ? c.hl0 : k === 'bike' ? 0.9 : 0.35;
+  c.hw = k === 'car' ? c.hw0 : k === 'fish' ? 0.6 : k === 'bug' ? 0.85 : k === 'bike' ? 0.35 : 0.3;
 }
 function placeSame(c, ahead){
   c.stand = false; setKind(c, c.want);
@@ -3861,6 +4001,8 @@ const ANOMALIES = {
   60: '高速道路の緑の看板が、一般道の青い看板の色になっている',
   61: 'トンネルを出てすぐの路肩で、パトカーと黒い車が撃ち合っている',
   62: '出口の手前に「出口 通行止 本線 直進」の案内板が立っている',
+  63: '走っている車の半分くらいが、車くらいの大きさの虫（アリ・クモ・バッタ・ハチ）になっている',
+  64: 'トンネルがいつもの倍の長さになっている',
 };
 const DM = { on: false, k: 0 };        // anomaly 20: the 大 on the far hill, and how lit it is
 const ANOM_IDS = Object.keys(ANOMALIES).map(Number);
@@ -3868,16 +4010,16 @@ const ANOM_IDS = Object.keys(ANOMALIES).map(Number);
    the same, so you learn him; from the fourth on, he can be the anomaly. */
 const BIKER_IDS = [22, 23, 24, 25, 26];
 /* these three only make sense once you have seen the ordinary version: never in the first zone */
-const LAP2_IDS = [28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40];   /* the patrol car's ones always wait for the second zone */
+const LAP2_IDS = [28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40, 64];   /* the patrol car's ones always wait for the second zone */
 let noInd = false;                     // anomaly 29, while it is showing
 /* how easy each one is to spot (see the list in DESIGN.md), and the share of each kind among
    the zones that have an anomaly */
 /* 5 levels (09-28): 1 = can't miss it ... 5 = very hard. 1 (舵) and 40 (mirror) change slowly,
    so they count as level 4. */
 const DIFF = [
-  [2, 7, 9, 14, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52, 54, 55, 57, 59, 61],
+  [2, 7, 9, 14, 18, 19, 21, 26, 33, 34, 37, 39, 46, 52, 54, 55, 57, 59, 61, 63],
   [12, 17, 20, 25, 31, 35, 42, 43, 47, 50, 51, 53, 56, 58, 60, 62],
-  [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48],
+  [3, 4, 6, 8, 11, 13, 15, 22, 24, 27, 30, 32, 41, 45, 48, 64],
   [1, 5, 10, 16, 23, 29, 36, 40],
   [28, 38, 44, 49],
 ];
@@ -3995,6 +4137,7 @@ function applyAnomaly(){
      back) and turns back into a car once the fog has it */
   for (const c of traffic) if (!c.onc){ c.want = 'car'; if (c.kind !== 'car') c.vPref = c.x > pose.x ? 45 : 14; }
   rainInTun = anomaly === 11; tunFlick = anomaly === 12;
+  setLongTunnel(anomaly === 64);
   if (anomaly === 2) redLamps();
   if (anomaly === 3) placePeople(1);
   if (anomaly === 4) signMode.mirror = true;
@@ -4044,19 +4187,20 @@ function enterTunnel(){
   if (anomaly === 7) flyers.forEach((f, i) => spawnFlyer(f, TUN_B + 150 + i * 110 + Math.random() * 40));
   if (anomaly === 15) runner.start(TUN_B + 150);     /* close enough that you meet him soon after the tunnel */
   if (anomaly === 17) standCar();
-  if (anomaly === 57){
+  if (anomaly === 57 || anomaly === 63){
+    const SWAPK = anomaly === 57 ? 'fish' : 'bug';
     /* half of them become fish now, set out along the road past the tunnel (like the bikes / runners),
        so you come up on them as soon as you are out (10-02: before, they only changed far off in
        the fog and you could go a whole zone without meeting one) */
     let i = 0, j = 0;
     for (const c of traffic) if (!c.onc && !c.truck && !c.extra && !c.parked && (i++ % 2 === 0)){
-      c.want = 'fish';
+      c.want = SWAPK;
       if (Math.abs(c.x - pose.x) <= 120) continue;
       for (let t = 0; t < 20; t++){
         const lane = Math.floor(Math.random() * 3), x = TUN_A + 50 + j * 85 + Math.random() * 50;   /* 10-02: from inside the tunnel on, spread out one by one */
         if (laneClear(lane, x, 15, 15, c)){ c.lane = c.tgt = lane; c.z = LANES[lane]; c.x = x; break; }
       }
-      j++; setKind(c, 'fish'); c.vPref = c.v = 19 + Math.random() * 4; c.lc = 0; c.ind = 0;
+      j++; setKind(c, SWAPK); c.vPref = c.v = 19 + Math.random() * 4; c.lc = 0; c.ind = 0;
     }
   }
   if (anomaly === 14 || anomaly === 18 || anomaly === 19){
@@ -4174,6 +4318,13 @@ function die(cause){ if (P.dead) return;
 function judgeAtFork(took){
   P.sections++;
   const right = took === (anomaly !== 0);
+  /* 10-03: 異変発見数 - which of the anomalies you have seen and taken the exit for, at least once.
+     Kept in the browser across sessions; debug runs don't count. */
+  if (anomaly !== 0 && took && !DBG.mode){
+    const ids = foundGet(); ids.add(anomaly);
+    try { localStorage.setItem('nd-found-ids', JSON.stringify([...ids])); } catch (_) {}
+    drawEndMarks();
+  }
   if (right && P.count >= 8){
     /* 8番出口: whichever way was right, its road home opens - off the loop, or off the main line */
     P.home = took ? 'exit' : 'main';
@@ -4259,7 +4410,15 @@ function clearBand(sec){
 }
 /* 10-02: which of the six endings this player has seen, kept in the browser, shown on the title */
 function endSeen(){ try { return new Set(JSON.parse(localStorage.getItem('nd-endings') || '[]')); } catch (_) { return new Set(); } }
+function foundGet(){ try { return new Set(JSON.parse(localStorage.getItem('nd-found-ids') || '[]').filter(id => ANOMALIES[id])); } catch (_) { return new Set(); } }
 function drawEndMarks(){
+  const fe = $('foundRate');
+  if (fe){
+    const n = foundGet().size, all = Object.keys(ANOMALIES).length;
+    fe.hidden = false;
+    fe.innerHTML = n >= all ? `異変発見数<b>${n}</b>/ ${all} ── ぜんぶ見つけた！`
+      : `異変発見数<b>${n}</b>/ ${all}（まだ見つけていない異変 あと<b>${all - n}</b>個）`;
+  }
   const seen = endSeen(), el = $('endMarks');
   if (!el) return;
   el.innerHTML = [1, 2, 3, 4, 5, 6].map(n => `<span class="em${seen.has(n) ? ' got' : ''}" title="エンディング${n}">${seen.has(n) ? 'E' + n : '?'}</span>`).join('')
@@ -4594,7 +4753,7 @@ function step(dt){
   flash = P.risk > 0.5 ? ((clock * 2.4) % 1 < 0.22 || ((clock * 2.4) % 1 > 0.34 && (clock * 2.4) % 1 < 0.5) ? 1.6 : 0.75) : 1.0;
 
   /* rain: stops under the tunnel roof. The beads already on the glass stay. */
-  const inTunnel = !P.onExit && P.x > TUN_A + 3 && P.x < TUN_B - 3;
+  const inTunnel = !P.onExit && P.x > TUN_A + 3 && P.x < TUN_END - 3;
   /* the whole zone, from 20 m short of its "1km" sign (the end of the section before, or at the very
      start of a run, just behind 0) to the fork - not only from the tunnel, as it was (09-28) */
   noInd = anomaly === 29 && !P.onExit && (P.x >= ZSIGN_X - 20 || (P.x >= ZSIGN_X - SECTION - 20 && P.x < FORK + 80));
@@ -4808,8 +4967,17 @@ function sync(){
     if (((performance.now() / 1000) * 2.2 + (i % 2) * 0.5) % 1 < 0.5) dglow(p[0], p[1], p[2], 1.0, 0.08, 0.05, 1.2);
   });
   for (const c of traffic){
-    if (c.parked){ c.mesh.visible = c.bikeM.g.visible = c.runM.g.visible = false; if (c.fishM) c.fishM.g.visible = false; if (c.seatM) c.seatM.g.visible = false; continue; }
-    if (!c.onc){ c.mesh.visible = c.kind === 'car'; c.bikeM.g.visible = c.kind === 'bike'; c.runM.g.visible = c.kind === 'run' && anomaly !== 14; if (c.seatM) c.seatM.g.visible = c.kind === 'run' && anomaly === 14; if (c.fishM) c.fishM.g.visible = c.kind === 'fish'; }
+    if (c.parked){ c.mesh.visible = c.bikeM.g.visible = c.runM.g.visible = false; if (c.fishM) c.fishM.g.visible = false; if (c.bugM) c.bugM.g.visible = false; if (c.seatM) c.seatM.g.visible = false; continue; }
+    if (!c.onc){ c.mesh.visible = c.kind === 'car'; c.bikeM.g.visible = c.kind === 'bike'; c.runM.g.visible = c.kind === 'run' && anomaly !== 14; if (c.seatM) c.seatM.g.visible = c.kind === 'run' && anomaly === 14; if (c.fishM) c.fishM.g.visible = c.kind === 'fish'; if (c.bugM) c.bugM.g.visible = c.kind === 'bug'; }
+    if (!c.onc && c.kind === 'bug'){
+      /* anomaly 63: legs in a tripod gait; the bees fly at roof height, wings a blur */
+      const M = c.bugM || (c.bugM = bugModel(traffic.indexOf(c))), ph = c.ph2 * 1.6;
+      M.g.visible = true;
+      M.g.position.set(c.x, M.fly ? 1.7 + Math.sin(clock * 2.1 + c.ph2) * 0.15 : Math.abs(Math.sin(ph)) * 0.04, c.z); M.g.rotation.set(0, -c.th, 0);
+      M.legs.forEach((L, i) => { L.rotation.y = (M.fly ? 0.15 : 0.35) * Math.sin(ph + (i % 2 === (Math.floor(i / 2) % 2) ? 0 : Math.PI)); });
+      for (const W of M.wings) W.w.rotation.x = W.s * (0.15 + 0.5 * Math.sin(clock * 55 + c.ph2));
+      continue;
+    }
     if (!c.onc && c.kind === 'fish'){
       /* 10-02: smooth gliding swim - slow gentle sway, no bobbing hops */
       const F = c.fishM || (c.fishM = fishModel(traffic.indexOf(c))), w = clock * 2.4 + c.ph2; F.g.visible = true;
@@ -4878,7 +5046,8 @@ function sync(){
   if (tw !== tunWord){ tunWord = tw; drawTunnelPlate(); }
   /* the tunnel anomalies built as overlays, moved onto the nearest copy of the tunnel */
   const tunX = SECTION * Math.round((pose.x - (TUN_A + TUN_B) / 2) / SECTION);
-  for (const [o, id] of [[peeled, 45], [streetArt, 46]]){ o.visible = anomaly === id; o.position.x = tunX; }
+  for (const [o, id] of [[peeled, 45], [streetArt, 46], [TUNX.g, 64]]){ o.visible = anomaly === id; o.position.x = tunX; }
+  for (const m of extRails) m.visible = anomaly !== 64;
   manyExits.visible = false; updateGoo(sdt, tunX);
   updateMonsters(sdt, tunX); updatePanelMan(sdt, tunX); updateGunfight(sdt, tunX); updateClosedSign(sdt, tunX);
   orbSitters.visible = anomaly === 42 && !P.homeLeg; orbSitters.position.x = SECTION * Math.round((pose.x - ORBIS_X) / SECTION);
@@ -4936,7 +5105,7 @@ function sync(){
 
   /* the cabin is lit by whatever lamp you are under, by the car behind, and red when it ends */
   sampleLM(pose.x, pose.z, lmS);
-  if (!P.onExit && P.x > TUN_A && P.x < TUN_B){ lmS[0] *= tunK; lmS[1] *= tunK; lmS[2] *= tunK; }
+  if (!P.onExit && P.x > TUN_A && P.x < TUN_END){ lmS[0] *= tunK; lmS[1] *= tunK; lmS[2] *= tunK; }
   let r = 0.085 + lmS[0]*0.42, g = 0.095 + lmS[1]*0.42, b = 0.125 + lmS[2]*0.42;   /* a little cool fill from the ambient lights (09-28) */
   if (followerOn){ const k = Math.pow(clamp(1 - (followerDist - 5) / 35, 0, 1), 2) * 0.9 * flash; r += k; g += k*0.97; b += k*0.9; }
   if (DAWN.k > 0){ const t = P.late ? 0.45 : 0.78; r = lerp(r, t, DAWN.k); g = lerp(g, t, DAWN.k); b = lerp(b, t + 0.03, DAWN.k); }
@@ -5033,7 +5202,7 @@ function sndUpdate(dt){
   if (!S.ctx || S.ctx.state !== 'running') return;
   const t = S.ctx.currentTime, set = (p, v, k = 0.08) => p.setTargetAtTime(v, t, k);
   const v = P.v, vn = clamp(v / VMAX, 0, 1);
-  const tun = !P.onExit && P.x > TUN_A && P.x < TUN_B;
+  const tun = !P.onExit && P.x > TUN_A && P.x < TUN_END;
   set(S.roadG.gain, v < 0.3 ? 0 : (0.06 + 0.55 * Math.pow(vn, 1.2)) * (tun ? 1.5 : 1));
   set(S.roadLP.frequency, 140 + 520 * vn);
   set(S.hissG.gain, 0.16 * Math.pow(vn, 1.4));
