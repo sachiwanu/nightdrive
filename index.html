@@ -139,8 +139,8 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
 .stats.home-stats{grid-template-columns:repeat(2,1fr);}
 #endGrade{display:flex;align-items:center;gap:10px;margin:6px 0 4px;}
 #endGrade .g-lab{font:700 13px/1 "BIZ UDPGothic",system-ui,sans-serif;letter-spacing:.2em;opacity:.75;}
-#gradeLetter{font:900 34px/1 "Zen Kaku Gothic New",system-ui,sans-serif;color:var(--sodium);min-width:1.1em;text-align:center;}
-#gradeLadder{display:flex;gap:4px;margin:0;padding:0;list-style:none;flex:1;}
+#gradeLetter{font:900 30px/1 "Zen Kaku Gothic New",system-ui,sans-serif;color:var(--sodium);letter-spacing:.06em;}
+#gradeLadder{display:none;gap:4px;margin:0;padding:0;list-style:none;flex:1;}   /* 10-04: the list of all six is not shown on the ending card */
 #gradeLadder li{flex:1;min-width:0;padding:5px 2px 4px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
   font:700 11px/1.25 "BIZ UDPGothic",system-ui,sans-serif;text-align:center;opacity:.5;}
 #gradeLadder li b{display:block;font-size:15px;}
@@ -213,7 +213,7 @@ body{margin:0;background:var(--night);color:var(--ink);overflow:hidden;
   <div class="home-card" role="dialog" aria-labelledby="endTtl">
     <p class="home-eyebrow" id="endNo">エンディング</p>
     <h1 id="endTtl">ただいま。</h1>
-    <div id="endGrade"><span class="g-lab">評価</span><b id="gradeLetter">S</b><ol id="gradeLadder"></ol></div>
+    <div id="endGrade"><b id="gradeLetter">S</b><ol id="gradeLadder"></ol></div>
     <dl class="stats home-stats">
       <div><dt>走った区間</dt><dd><b id="endSecs">0</b></dd></div>
       <div><dt>時間</dt><dd><b id="endTime">0:00</b></dd></div>
@@ -4435,7 +4435,8 @@ function showEnding(){
   /* 10-02: where this ending stands among the six, best to worst, with its grade */
   const LADDER = [[1, 'S', '出迎え'], [2, 'A', '帰宅'], [4, 'B', '遅すぎた'], [3, 'C', '三途の川'], [5, 'D', '警察と川'], [6, 'E', '検挙']];
   $('gradeLadder').innerHTML = LADDER.map(([no, g, name]) => `<li class="${no === P.endingNo ? 'on' : ''}"><b>${g}</b>${name}<br>E${no}</li>`).join('');
-  $('gradeLetter').textContent = (LADDER.find(l => l[0] === P.endingNo) || [0, '-'])[1];
+  /* 10-04: said in words, not a letter */
+  $('gradeLetter').textContent = ({ 1: 'HAPPY END', 2: 'NORMAL END', 4: 'BITTER END', 3: 'BAD END', 5: 'WORST END', 6: 'ARREST END' })[P.endingNo] || '';
   $('endMiss').textContent = P.mistakes; $('endCrash').textContent = P.crashes;
   const t = Math.round(P.runT), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('endSecs').textContent = P.sections; $('endTime').textContent = mm + ':' + ss;
